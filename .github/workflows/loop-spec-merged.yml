@@ -1,0 +1,84 @@
+name: Loop / spec merged
+
+on:
+  workflow_call:
+    secrets:
+      LOOP_GH_TOKEN:
+        description: Fine-grained token with Issues read/write on the crucibledx repos specs can target
+        required: true
+
+jobs:
+  dispatch:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Create loop:implement issues for approved specs
+        env:
+          GH_TOKEN: ${{ secrets.LOOP_GH_TOKEN }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+          REPO: ${{ github.repository }}
+          SERVER: ${{ github.server_url }}
+        run: |
+          set -euo pipefail
+          if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then BEFORE="$AFTER~1"; fi
+          changed=$(git diff --name-only --diff-filter=AM "$BEFORE" "$AFTER" -- 'specs/*.md' | grep -v -E '(^|/)(_template|README)\.md$' || true)
+          [ -z "$changed" ] && { echo "No spec changes."; exit 0; }
+          owner="${REPO%%/*}"
+          for f in $changed; do
+            meta=$(python3 - "$f" <<'PY'
+          import json, re, sys
+          text = open(sys.argv[1], encoding="utf-8").read()
+          m = re.match(r"^---\n(.*?)\n---\n", text, re.S)
+          fm = {}
+          if m:
+              for line in m.group(1).splitlines():
+                  line = line.split("#", 1)[0].rstrip()
+                  if ":" in line:
+                      k, v = line.split(":", 1)
+                      fm[k.strip()] = v.strip().strip('"').strip("'")
+          targets = [t.strip() for t in fm.get("target_repos", "").strip("[]").split(",") if t.strip()]
+          print(json.dumps({"id": fm.get("id", ""), "title": fm.get("title", ""), "status": fm.get("status", ""),
+                            "size": fm.get("size", "session"), "targets": targets}))
+          PY
+            )
+            status=$(echo "$meta" | python3 -c 'import json,sys;print(json.load(sys.stdin)["status"])')
+            if [ "$status" != "approved" ]; then echo "$f: status=$status, skipping"; continue; fi
+            id=$(echo "$meta" | python3 -c 'import json,sys;print(json.load(sys.stdin)["id"])')
+            title=$(echo "$meta" | python3 -c 'import json,sys;print(json.load(sys.stdin)["title"])')
+            size=$(echo "$meta" | python3 -c 'import json,sys;print(json.load(sys.stdin)["size"])')
+            targets=$(echo "$meta" | python3 -c 'import json,sys;t=json.load(sys.stdin)["targets"];print(" ".join(t))')
+            [ -z "$targets" ] && targets="${REPO#*/}"
+            spec_url="$SERVER/$REPO/blob/$AFTER/$f"
+            for t in $targets; do
+              target="$owner/$t"
+              marker="loop-spec: $REPO/$f"
+              if gh issue list --repo "$target" --label loop:implement --state all --limit 200 --json body \
+                   --jq ".[].body" | grep -qF "$marker"; then
+                echo "$target: issue for $f already exists"; continue
+              fi
+              gh label create loop:implement --repo "$target" --color D93F0B \
+                --description "Implement an approved spec (Crucible loop)" --force >/dev/null
+              body=$(printf '%s\n' \
+                "Implement spec **$id: $title** in this repository." \
+                "" \
+                "- Spec: $spec_url" \
+                "- Size: $size" \
+                "" \
+                "Follow the \`implement-spec\` skill from the crucible-loop plugin. Implement only the parts of the spec that" \
+                "belong to this repository, measure completion against the spec's acceptance contract, and open a PR" \
+                "that links this issue." \
+                "" \
+                "<!-- $marker -->")
+              url=$(gh issue create --repo "$target" --title "loop: implement spec $id ($title)" --body "$body")
+              # Label after creation so the labeled event starts the implement workflow.
+              gh issue edit "$url" --add-label loop:implement >/dev/null
+              echo "$target: created $url"
+            done
+          done

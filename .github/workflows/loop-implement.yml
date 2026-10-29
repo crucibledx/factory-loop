@@ -1,0 +1,48 @@
+name: Loop / implement
+
+on:
+  workflow_call:
+    inputs:
+      lfs:
+        description: Fetch Git LFS objects on checkout
+        type: boolean
+        default: false
+      setup_bun:
+        description: Install Bun before Droid runs
+        type: boolean
+        default: true
+      timeout_minutes:
+        type: number
+        default: 240
+    secrets:
+      FACTORY_API_KEY:
+        required: true
+
+jobs:
+  implement:
+    if: github.event_name == 'issues' && github.event.label.name == 'loop:implement'
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.timeout_minutes }}
+    concurrency:
+      group: loop-implement-${{ github.repository }}-${{ github.event.issue.number }}
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+      actions: read
+      checks: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          lfs: ${{ inputs.lfs }}
+      - if: inputs.setup_bun
+        uses: oven-sh/setup-bun@v2
+      - uses: Factory-AI/droid-action@main
+        with:
+          factory_api_key: ${{ secrets.FACTORY_API_KEY }}
+          label_trigger: loop:implement
+          track_progress: "true"
+          settings: '{"extraKnownMarketplaces":{"factory-loop":{"source":{"source":"github","repo":"crucibledx/factory-loop"}}},"enabledPlugins":{"crucible-loop@factory-loop":true}}'

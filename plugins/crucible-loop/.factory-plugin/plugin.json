@@ -1,0 +1,10 @@
+{
+  "name": "crucible-loop",
+  "description": "Skills, droids, and guard hooks for the Crucible idea → spec → implementation loop",
+  "version": "0.1.0",
+  "author": { "name": "Nazar Usik" },
+  "homepage": "https://github.com/crucibledx/factory-loop",
+  "repository": "https://github.com/crucibledx/factory-loop",
+  "license": "MIT",
+  "keywords": ["workflow", "specs", "review", "orchestration"]
+}

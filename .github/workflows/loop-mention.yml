@@ -1,0 +1,32 @@
+name: Loop / mention
+
+on:
+  workflow_call:
+    secrets:
+      FACTORY_API_KEY:
+        required: true
+
+jobs:
+  droid:
+    if: |
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@droid')) ||
+      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@droid')) ||
+      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@droid'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+      actions: read
+      checks: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+      - uses: Factory-AI/droid-action@main
+        with:
+          factory_api_key: ${{ secrets.FACTORY_API_KEY }}
+          settings: '{"extraKnownMarketplaces":{"factory-loop":{"source":{"source":"github","repo":"crucibledx/factory-loop"}}},"enabledPlugins":{"crucible-loop@factory-loop":true}}'

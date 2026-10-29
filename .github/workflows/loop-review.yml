@@ -1,0 +1,40 @@
+name: Loop / review
+
+on:
+  workflow_call:
+    inputs:
+      review_depth:
+        description: deep or shallow
+        type: string
+        default: deep
+      security_review:
+        type: boolean
+        default: true
+    secrets:
+      FACTORY_API_KEY:
+        required: true
+
+jobs:
+  review:
+    if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    concurrency:
+      group: loop-review-${{ github.repository }}-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - uses: Factory-AI/droid-action@main
+        with:
+          factory_api_key: ${{ secrets.FACTORY_API_KEY }}
+          automatic_review: "true"
+          automatic_security_review: ${{ inputs.security_review && 'true' || 'false' }}
+          review_depth: ${{ inputs.review_depth }}

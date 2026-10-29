@@ -1,0 +1,15 @@
+{
+  "PreToolUse": [
+    {
+      "matcher": "Execute",
+      "commandRegex": "(git\\s+push|gh\\s+pr\\s+merge|gh\\s+api\\s+.*merge)",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "${DROID_PLUGIN_ROOT}/hooks/guard-git.sh",
+          "timeout": 15
+        }
+      ]
+    }
+  ]
+}

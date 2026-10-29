@@ -1,0 +1,16 @@
+{
+  "name": "factory-loop",
+  "description": "Crucible delivery loop for Droid: idea to spec PR to tested implementation PR",
+  "owner": {
+    "name": "Crucible DX",
+    "email": "nazar.usik@crucibledx.dev"
+  },
+  "plugins": [
+    {
+      "name": "crucible-loop",
+      "description": "Skills, droids, and guard hooks for the Crucible idea → spec → implementation loop",
+      "source": "./plugins/crucible-loop",
+      "category": "workflow"
+    }
+  ]
+}
