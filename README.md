@@ -18,7 +18,7 @@ idea (Slack / hq issue) → discovery brief → spec PR ──merge──▶ loo
 | `plugins/crucible-loop/droids/`       | `researcher`, `spec-reviewer-arch`, `spec-reviewer-product`, `code-reviewer`, `verifier` |
 | `plugins/crucible-loop/hooks/`        | Guard: blocks pushes to `main`, force pushes, and PR merges             |
 | `.github/workflows/loop-*.yml`        | Reusable workflows: implement, review, `@droid` mentions, spec merged   |
-| `templates/repo/`                     | The thin per-repo files: caller workflow, `.factory/settings.json`, AGENTS.md loop contract |
+| `templates/repo/`                     | The thin per-repo files: caller workflow, `.factory/settings.json`, `.factory/loop-contract.md` |
 
 ## Add the loop to a repo
 
@@ -26,7 +26,8 @@ idea (Slack / hq issue) → discovery brief → spec PR ──merge──▶ loo
 scripts/install.sh ~/crucible/projects/<repo>
 ```
 
-Then append `templates/repo/AGENTS.loop-contract.md` to the repo's `AGENTS.md` with its real check commands.
+Then edit `.factory/loop-contract.md` with the repo's real check commands. (A `## Loop contract` section in
+`AGENTS.md` also works.)
 
 Secrets, set once:
 

@@ -1,4 +1,4 @@
-## Loop contract
+# Loop contract
 
 Read by the Crucible loop agents (`implement-spec`, `verifier`). Keep it accurate.
 

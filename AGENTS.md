@@ -5,8 +5,8 @@ Org context: `crucibledx/hq` `AGENTS.md`.
 
 ## Rules
 
-- Everything here is shared by every repo. Keep repo-specific details out; they belong in each repo's `AGENTS.md`
-  "Loop contract" section.
+- Everything here is shared by every repo. Keep repo-specific details out; they belong in each repo's
+  `.factory/loop-contract.md`.
 - Skills and droids are prompts: keep them short, concrete, and testable. Change one behavior per PR and say which loop
   stage it affects.
 - Reusable workflows are a public interface. Adding an input with a default is a minor change; renaming or removing one
