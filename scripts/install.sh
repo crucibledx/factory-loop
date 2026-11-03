@@ -11,9 +11,10 @@ copy() {
 }
 copy .github/workflows/crucible-loop.yml
 copy .factory/settings.json
-mkdir -p "$repo/specs"
-if [ -f "$repo/AGENTS.md" ] && grep -q '^## Loop contract' "$repo/AGENTS.md"; then
-  echo "skip   AGENTS.md loop contract (exists)"
-else
-  echo "todo   append templates/repo/AGENTS.loop-contract.md to AGENTS.md and adjust the commands"
+copy .factory/loop-contract.md
+if [ ! -d "$repo/specs" ]; then
+  mkdir -p "$repo/specs"
+  printf '# Specs\n\nProject specs for this repo. Process and template: crucibledx/hq specs/README.md.\n' > "$repo/specs/README.md"
+  echo "added  specs/README.md"
 fi
+echo "todo   edit .factory/loop-contract.md with this repo's real commands"

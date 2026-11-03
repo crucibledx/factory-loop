@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.1.1 — 2026-10-29
+
+- Loop contract lives in `.factory/loop-contract.md` (an `AGENTS.md` `## Loop contract` section still works).
+- `scripts/install.sh` adds the contract file and `specs/README.md`.
+- Guard hook checks each part of a chained command separately, so `git push <branch> && gh pr create --base main` is
+  no longer blocked.
+
 ## v0.1.0 — 2026-10-29
 
 - Plugin marketplace `factory-loop` with plugin `crucible-loop`.

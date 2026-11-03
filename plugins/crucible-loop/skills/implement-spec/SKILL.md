@@ -10,8 +10,8 @@ the spec's acceptance contract and CI, marked ready for review, or a draft PR wi
 
 ## Before coding
 
-1. Read the spec end to end, the repo's `AGENTS.md`, and the `## Loop contract` section in it (check commands, commit
-   style, release rules).
+1. Read the spec end to end, the repo's `AGENTS.md`, and its loop contract: `.factory/loop-contract.md`, or the
+   `## Loop contract` section of `AGENTS.md` (check commands, commit style, release rules).
 2. Read the code the spec touches. List the acceptance contract rows that apply to this repo.
 3. For large specs (`size: mission`) plan milestones that each close a group of contract rows.
 
@@ -19,7 +19,7 @@ the spec's acceptance contract and CI, marked ready for review, or a draft PR wi
 
 1. **Implement** on a branch `loop/NNNN-slug` (or the branch the workflow gives you). Small, coherent commits in the
    repo's commit style. Add or update tests for each contract row as you go.
-2. **Run the repo checks** from the Loop contract (format, lint, typecheck, tests, build). Fix failures before moving on.
+2. **Run the repo checks** from the loop contract (format, lint, typecheck, tests, build). Fix failures before moving on.
 3. **Verify** with the `verifier` droid: give it the spec path and the branch. It runs every applicable contract check
    and reports pass/fail per row with evidence. It does not see your reasoning.
 4. **Review** with the `code-reviewer` droid in parallel: correctness, security, maintainability, scope creep.
