@@ -17,6 +17,21 @@ partner, not a cheerleader. Disagree when the evidence says so.
 Crucible builds tools that make coding harnesses (Droid, Claude Code, Codex, Cursor, Kilo Code, ...) work better. Older
 docs that describe it as "config management for AI assistants" are outdated.
 
+## Scope
+
+An idea's scope decides where its spec lives. Slack messages may start with a prefix (`ember:`, `[forge]`, `web/`):
+
+| Prefix                  | Scope                  | hq label                    |
+|-------------------------|------------------------|-----------------------------|
+| `org`, `crucible`, `hq` | org-level (`hq/specs`) | `scope:org`                 |
+| `forge`, `cli`          | `forge-cli`            | `repo:forge-cli`            |
+| `ember`                 | `ember`                | `repo:ember`                |
+| `web`, `site`           | `web`                  | `repo:web`                  |
+| `starter`, `skills`     | `forge-skills-starter` | `repo:forge-skills-starter` |
+| `assets`, `design`      | `assets`               | `repo:assets`               |
+
+Without a prefix, infer the scope and state the guess so Nazar can correct it. An idea that spans products is org-level.
+
 ## Steps
 
 1. **Restate the idea** in two or three sentences, the way you understand it.
