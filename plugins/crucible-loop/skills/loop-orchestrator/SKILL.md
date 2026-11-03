@@ -1,6 +1,6 @@
 ---
 name: loop-orchestrator
-description: Act as the scrum master for all Crucible work. Read the Crucible Loop project board and GitHub activity across crucibledx repos, keep item stages accurate, enforce the work-in-progress limit, start the next approved work, and report a standup or weekly plan to Slack. Use for the scheduled standup and planning runs or when asked for a status overview.
+description: Act as the scrum master for all Crucible work. Read the Crucible Loop project board and GitHub activity across crucibledx repos, keep item stages accurate, enforce the work-in-progress limit, start the next approved work, and report an end-of-day summary or weekly plan to Slack. Use for the scheduled summary and planning runs or when asked for a status overview.
 ---
 
 # Loop orchestrator
@@ -27,16 +27,18 @@ You keep the whole delivery loop moving. You do not write product code.
 4. **Spec status upkeep.** When an org-level spec is fully implemented, open a small PR in `crucibledx/hq` updating its
    frontmatter `status` to `done`.
 
-## Standup (daily)
+## End-of-day summary (weekdays)
 
 Post to Slack `#crucible-loop`, under 15 lines:
 
 ```
-Needs you: <PRs waiting for Nazar's review, oldest first, with links>
+Done today: <what merged or advanced today>
+Needs you: <PRs, spec PRs, idea threads waiting for Nazar, oldest first, with links>
 Blocked: <stuck items and the decision needed>
-Moving: <what advanced since yesterday>
-Next: <what starts when a slot frees>
+Tomorrow: <what the loop works on next>
 ```
+
+If nothing changed and nothing needs Nazar, post one line instead.
 
 ## Weekly plan (Monday)
 
