@@ -14,7 +14,7 @@ idea (Slack / hq issue) → discovery brief → spec PR ──merge──▶ loo
 | Path                                  | What it is                                                              |
 |---------------------------------------|-------------------------------------------------------------------------|
 | `.factory-plugin/marketplace.json`    | Droid plugin marketplace `factory-loop`                                 |
-| `plugins/crucible-loop/skills/`       | `idea-discovery`, `spec-writer`, `acceptance-contract`, `implement-spec`, `loop-orchestrator` |
+| `plugins/crucible-loop/skills/`       | `idea-discovery`, `spec-writer`, `acceptance-contract`, `implement-spec`, `loop-orchestrator`, `engineering-standards` |
 | `plugins/crucible-loop/droids/`       | `researcher`, `spec-reviewer-arch`, `spec-reviewer-product`, `code-reviewer`, `verifier` |
 | `plugins/crucible-loop/hooks/`        | Guard: blocks pushes to `main`, force pushes, and PR merges             |
 | `.github/workflows/loop-*.yml`        | Reusable workflows: review + merge gate, `@droid` mentions, spec merged (`loop-implement` is deprecated) |
