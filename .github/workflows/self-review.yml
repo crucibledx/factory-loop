@@ -1,0 +1,19 @@
+# factory-loop reviews its own PRs with the review workflow from the PR branch, so changes are tested before release.
+name: Self review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  pull_request_review_thread:
+    types: [resolved, unresolved]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  review:
+    uses: ./.github/workflows/loop-review.yml
+    with:
+      loop_ref: ${{ github.event.pull_request.head.sha }}
+    secrets: inherit

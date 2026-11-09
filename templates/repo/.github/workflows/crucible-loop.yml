@@ -12,6 +12,8 @@ on:
     types: [submitted]
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
+  pull_request_review_thread:
+    types: [resolved, unresolved]
   push:
     branches: [main]
     paths: ["specs/**"]
@@ -37,11 +39,10 @@ jobs:
     uses: crucibledx/factory-loop/.github/workflows/loop-mention.yml@v0
     secrets: inherit
 
+  # Required by the main-branch ruleset: fails while blocking review threads are unresolved.
   review:
-    if: github.event_name == 'pull_request'
+    if: contains(fromJSON('["pull_request","pull_request_review_thread"]'), github.event_name)
     uses: crucibledx/factory-loop/.github/workflows/loop-review.yml@v0
-    with:
-      review_depth: deep
     secrets: inherit
 
   specs:
