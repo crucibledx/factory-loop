@@ -36,12 +36,18 @@ Open the PR as draft first so the hosted review runs once on a complete change, 
    from an older commit.
 2. **Collect everything at once:** failing CI jobs (`gh run view <id> --log-failed`) and every unresolved review
    thread (GraphQL `reviewThreads` with `isResolved`, or the gate output in the `review` job summary).
-3. **Fix all of it in one batch**, run the repo checks locally, and push once. One push per round, not one per finding.
-4. **Reply on each thread** you addressed, as a direct reply (never a pending review):
+3. **Fix all of it in one batch** and run the repo checks locally. Commit, but do not push yet.
+4. **Reply on each thread before pushing**, so the follow-up review sees your replies. Use a direct reply (never a
+   pending review):
    `gh api repos/<owner>/<repo>/pulls/<n>/comments/<comment_id>/replies -f body="Fixed in <sha>: <what changed>"`.
    If you disagree or the finding is out of scope, reply with the reason and the follow-up issue link instead. Do not
-   resolve the reviewer's threads yourself; the follow-up review resolves them after checking.
-5. **Done** when CI and `review` are green on the head commit and no P0/P1 thread is unresolved. P2 threads: fix them
+   resolve the reviewer's threads yourself; the follow-up review resolves them after checking. If the reply fails
+   with "one pending review per pull request", someone using the same GitHub account has an unsubmitted review: do
+   not submit or discard it; post one PR comment listing each thread and your answer instead, and tell Nazar.
+5. **Push once.** One push per round, not one per finding. If the round had replies only (no code change), push an
+   empty commit (`git commit --allow-empty -m "chore: request follow-up review"`) so the follow-up review judges
+   the replies; nothing else re-runs it.
+6. **Done** when CI and `review` are green on the head commit and no P0/P1 thread is unresolved. P2 threads: fix them
    or answer with a reason; they do not block. Update the PR body (below), mark ready, and post the PR link where the
    work was requested (Slack thread or issue).
 
