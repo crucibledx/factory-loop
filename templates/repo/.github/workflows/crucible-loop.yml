@@ -12,8 +12,6 @@ on:
     types: [submitted]
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
-  pull_request_review_thread:
-    types: [resolved, unresolved]
   push:
     branches: [main]
     paths: ["specs/**"]
@@ -40,8 +38,9 @@ jobs:
     secrets: inherit
 
   # Required by the main-branch ruleset: fails while blocking review threads are unresolved.
+  # Runs on every PR event here (review events only re-check the gate); a skipped required check would count as passing.
   review:
-    if: contains(fromJSON('["pull_request","pull_request_review_thread"]'), github.event_name)
+    if: contains(fromJSON('["pull_request","pull_request_review","pull_request_review_comment"]'), github.event_name)
     uses: crucibledx/factory-loop/.github/workflows/loop-review.yml@v0
     secrets: inherit
 
