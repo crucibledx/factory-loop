@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- `loop-review` v2: one consolidated review per push. The first review covers the whole PR; later reviews cover only
+  new commits, judge every open finding (reply and resolve when fixed, reply "Not fixed" when not), and warn when the
+  PR grew past 1.5x its first reviewed size.
+- `loop-review` gates the merge: the check fails while P0/P1 reviewer threads are unresolved
+  (`blocking_severities` input). Review submissions re-run only the gate, without a model call. The gate also fails while the checked-out commit has no completed review.
+- New inputs `review_model` (default `openai-latest-balanced`), `reasoning_effort`, `blocking_severities`, `loop_ref`.
+- factory-loop reviews its own PRs with the workflow from the PR branch (`self-review.yml`).
+- Template: the `review` job also runs on `pull_request_review`.
+
 ## v0.1.1 — 2026-10-29
 
 - Loop contract lives in `.factory/loop-contract.md` (an `AGENTS.md` `## Loop contract` section still works).

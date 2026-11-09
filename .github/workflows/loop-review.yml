@@ -1,40 +1,85 @@
 name: Loop / review
 
+# One check that both reviews and gates the PR:
+# - pull_request: full review on the first non-draft push, then follow-up reviews of new commits only.
+# - pull_request_review: no model run; re-evaluates the gate, e.g. after Nazar resolves a thread and submits a review.
+#   (pull_request_review_comment and pull_request_review_thread don't count for required checks.)
+# The job fails while reviewer threads with a blocking severity stay unresolved, or while the checked-out commit has
+# no completed review, so a ruleset can require it.
+
 on:
   workflow_call:
     inputs:
       review_depth:
-        description: deep or shallow
+        description: deep (medium reasoning) or shallow (low reasoning). Ignored when reasoning_effort is set.
         type: string
         default: deep
       security_review:
+        description: Kept for compatibility; security is part of every review now.
         type: boolean
         default: true
+      review_model:
+        description: Reviewer model. A provider tier alias keeps it current; use a different family than the implementer.
+        type: string
+        default: openai-latest-balanced
+      reasoning_effort:
+        type: string
+        default: ""
+      blocking_severities:
+        description: Comma-separated severities whose unresolved threads fail the check.
+        type: string
+        default: P0,P1
+      loop_ref:
+        description: Ref of crucibledx/factory-loop to load the review prompt and org standards from.
+        type: string
+        default: v0
     secrets:
       FACTORY_API_KEY:
         required: true
 
 jobs:
   review:
-    if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
+    if: |
+      (github.event_name == 'pull_request' && github.event.pull_request.draft == false) ||
+      (github.event_name == 'pull_request_review' && github.event.pull_request.draft == false)
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 45
     concurrency:
-      group: loop-review-${{ github.repository }}-${{ github.event.pull_request.number }}
+      group: loop-review-${{ github.repository }}-${{ github.event.pull_request.number }}-${{ github.event_name }}
       cancel-in-progress: true
     permissions:
-      contents: write
+      contents: write # resolveReviewThread is refused to the Actions token without it
       pull-requests: write
-      issues: write
-      id-token: write
-      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      PR: ${{ github.event.pull_request.number }}
+      EVENT_NAME: ${{ github.event_name }}
+      BLOCKING_SEVERITIES: ${{ inputs.blocking_severities }}
+      LOOP_REVIEW_DIR: ${{ github.workspace }}/.loop-review
+      LOOP_STANDARDS: ${{ github.workspace }}/.factory-loop/plugins/crucible-loop/skills/engineering-standards/SKILL.md
+      LOOP_REVIEW_PROMPT: ${{ github.workspace }}/.factory-loop/review/prompt.md
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 1
-      - uses: Factory-AI/droid-action@main
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - uses: actions/checkout@v4
         with:
-          factory_api_key: ${{ secrets.FACTORY_API_KEY }}
-          automatic_review: "true"
-          automatic_security_review: ${{ inputs.security_review && 'true' || 'false' }}
-          review_depth: ${{ inputs.review_depth }}
+          repository: crucibledx/factory-loop
+          ref: ${{ inputs.loop_ref }}
+          path: .factory-loop
+      - id: collect
+        run: echo "mode=$(python3 .factory-loop/review/loop_review.py collect)" >> "$GITHUB_OUTPUT"
+      - name: Review
+        if: steps.collect.outputs.mode != 'gate'
+        env:
+          FACTORY_API_KEY: ${{ secrets.FACTORY_API_KEY }}
+          EFFORT: ${{ inputs.reasoning_effort || (inputs.review_depth == 'shallow' && 'low' || 'medium') }}
+        run: |
+          curl -fsSL https://app.factory.ai/cli | sh
+          export PATH="$HOME/.local/bin:$PATH"
+          droid exec --auto low -m "${{ inputs.review_model }}" -r "$EFFORT" -f "$LOOP_REVIEW_DIR/prompt.md"
+          python3 .factory-loop/review/loop_review.py post
+      - name: Gate
+        run: python3 .factory-loop/review/loop_review.py gate
