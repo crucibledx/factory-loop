@@ -5,8 +5,8 @@ spec becomes a tested implementation PR. Shared by every `crucibledx` repo, so e
 it.
 
 ```
-idea (Slack / hq issue) → discovery brief → spec PR ──merge──▶ loop:implement issue → implementation PR (ready, green)
-                                  ▲ 2 reviewer droids                       ▲ verifier + code-reviewer, ≤ 4 rounds
+idea (Slack / hq issue) → discovery brief → spec PR ──merge──▶ loop:implement issue → Workstream implementer → PR (green, no open P0/P1)
+                                  ▲ 2 reviewer droids                                    ▲ local verifier + code-reviewer, then PR review loop
 ```
 
 ## What's inside
@@ -17,7 +17,7 @@ idea (Slack / hq issue) → discovery brief → spec PR ──merge──▶ loo
 | `plugins/crucible-loop/skills/`       | `idea-discovery`, `spec-writer`, `acceptance-contract`, `implement-spec`, `loop-orchestrator` |
 | `plugins/crucible-loop/droids/`       | `researcher`, `spec-reviewer-arch`, `spec-reviewer-product`, `code-reviewer`, `verifier` |
 | `plugins/crucible-loop/hooks/`        | Guard: blocks pushes to `main`, force pushes, and PR merges             |
-| `.github/workflows/loop-*.yml`        | Reusable workflows: implement, review, `@droid` mentions, spec merged   |
+| `.github/workflows/loop-*.yml`        | Reusable workflows: review + merge gate, `@droid` mentions, spec merged (`loop-implement` is deprecated) |
 | `templates/repo/`                     | The thin per-repo files: caller workflow, `.factory/settings.json`, `.factory/loop-contract.md` |
 
 ## Add the loop to a repo

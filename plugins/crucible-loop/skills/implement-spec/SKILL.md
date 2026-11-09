@@ -1,43 +1,69 @@
 ---
 name: implement-spec
-description: Implement an approved Crucible spec in one repo and drive it to a PR that is tested and ready for Nazar's final review. Runs the inner loop of implement, independent review, verification against the acceptance contract, and fix, with a round limit. Use for issues labeled loop:implement or when asked to implement a spec.
+description: Implement an approved Crucible spec or a scoped GitHub issue in one repo and own the PR until it is green and has no open review findings. Runs a local implement/verify/review loop, then answers the PR reviewer in batches until the review gate passes. Use when asked to implement a spec or an issue, or when dispatched by the loop orchestrator.
 ---
 
 # Implement spec
 
-Input: a `loop:implement` issue (or a direct request) that links a merged spec. Output: a PR that passes every check in
-the spec's acceptance contract and CI, marked ready for review, or a draft PR with a clear escalation.
+Input: a merged spec, or a GitHub issue small enough to act as its own spec. Output: a PR whose CI and `review` check
+are green on the latest commit, with no unresolved P0/P1 review threads, marked ready for review. Or a draft PR with a
+clear escalation. You own the PR until one of those two states; do not stop earlier and do not wait to be asked.
 
 ## Before coding
 
-1. Read the spec end to end, the repo's `AGENTS.md`, and its loop contract: `.factory/loop-contract.md`, or the
-   `## Loop contract` section of `AGENTS.md` (check commands, commit style, release rules).
-2. Read the code the spec touches. List the acceptance contract rows that apply to this repo.
-3. For large specs (`size: mission`) plan milestones that each close a group of contract rows.
+1. Read the spec (or issue) end to end, the repo's `AGENTS.md`, its loop contract (`.factory/loop-contract.md`), and the
+   `engineering-standards` skill. Follow the standards from the first commit; the PR reviewer checks them.
+2. Read the code the change touches. List the acceptance contract rows that apply to this repo.
+3. **Size budget:** one PR should stay under ~1,500 changed lines including tests. If the work is bigger, split it into
+   milestones that each close a group of contract rows and ship as separate PRs. Ask in the issue before starting if
+   the spec does not allow a split.
+4. Work in your own clone or worktree under `~/crucible-agents/` on branch `loop/<issue>-<slug>`. Never in
+   `~/crucible/projects/`. Parallel agents never share a branch.
 
-## Inner loop (max 4 rounds)
+## Local loop (before the PR, max 3 rounds)
 
-1. **Implement** on a branch `loop/NNNN-slug` (or the branch the workflow gives you). Small, coherent commits in the
-   repo's commit style. Add or update tests for each contract row as you go.
-2. **Run the repo checks** from the loop contract (format, lint, typecheck, tests, build). Fix failures before moving on.
-3. **Verify** with the `verifier` droid: give it the spec path and the branch. It runs every applicable contract check
-   and reports pass/fail per row with evidence. It does not see your reasoning.
-4. **Review** with the `code-reviewer` droid in parallel: correctness, security, maintainability, scope creep.
-5. **Fix** every failed row and every review finding you agree with. Record rejected findings with a reason.
-6. Stop when all applicable rows pass, checks are green, and the reviewer has no blocking findings. Otherwise start the
-   next round.
+1. **Implement** in small, coherent commits in the repo's commit style, with tests for each contract row.
+2. **Run the repo checks** from the loop contract (format, lint, typecheck, tests, build). Fix failures.
+3. **Verify** with the `verifier` droid (spec path + branch) and **review** with the `code-reviewer` droid in parallel.
+4. **Fix** every failed row and every finding you agree with. Stop when rows pass, checks are green, and there are no
+   blocking findings.
 
-## Finish
+## PR loop (after the PR is open)
 
-- **Done:** open (or update) the PR, title in the repo's commit style, body with: link to spec and issue, a table of
-  contract rows with pass/fail and evidence, review findings and resolutions, and anything Nazar should look at first.
-  Mark it ready for review.
-- **Not done after 4 rounds:** keep the PR as draft, add a comment "Loop stopped after 4 rounds" with the failing rows,
-  what was tried, and the decision needed. Do not keep looping.
+Open the PR as draft first so the hosted review runs once on a complete change, then mark it ready. Then repeat:
+
+1. **Wait** for every check on the head commit, including `review`: `gh pr checks <n> --watch`. Never act on results
+   from an older commit.
+2. **Collect everything at once:** failing CI jobs (`gh run view <id> --log-failed`) and every unresolved review
+   thread (GraphQL `reviewThreads` with `isResolved`, or the gate output in the `review` job summary).
+3. **Fix all of it in one batch**, run the repo checks locally, and push once. One push per round, not one per finding.
+4. **Reply on each thread** you addressed, as a direct reply (never a pending review):
+   `gh api repos/<owner>/<repo>/pulls/<n>/comments/<comment_id>/replies -f body="Fixed in <sha>: <what changed>"`.
+   If you disagree or the finding is out of scope, reply with the reason and the follow-up issue link instead. Do not
+   resolve the reviewer's threads yourself; the follow-up review resolves them after checking.
+5. **Done** when CI and `review` are green on the head commit and no P0/P1 thread is unresolved. P2 threads: fix them
+   or answer with a reason; they do not block. Update the PR body (below), mark ready, and post the PR link where the
+   work was requested (Slack thread or issue).
+
+## When to stop and ask Nazar
+
+Keep the PR as draft and comment with the open items, what you tried, and the decision needed, when:
+
+- the PR grew past 1.5x its first reviewed size (the review posts a scope warning), or past the size budget;
+- the same thread came back "Not fixed" twice;
+- 6 PR rounds passed without reaching done;
+- a finding needs a spec change or a product decision.
+
+## PR body
+
+Link to the spec and issue; a table of contract rows with pass/fail and the check that proves it; review findings you
+rejected, with the reason; anything Nazar should look at first. Keep it short. No adjudication documents, evidence
+bundles, or attestation tooling in the repo unless the spec asks for them.
 
 ## Rules
 
 - Never edit the spec's acceptance contract. If a row is wrong or impossible, explain it in the PR and leave it failing.
 - Never push to `main`, never force-push, never merge.
 - Releases (version bumps, tags, publishing) are out of scope unless the spec says otherwise.
-- Stay inside the spec. Unrelated improvements go in a follow-up idea, not this PR.
+- Stay inside the spec. Unrelated improvements, including pre-existing problems the reviewer finds, go in follow-up
+  issues, not this PR.

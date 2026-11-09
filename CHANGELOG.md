@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- `implement-spec` owns the PR until CI and the review gate are green: batch fixes, direct thread replies, escalation
+  rules instead of a fixed round limit, ~1,500-line PR budget.
+- `spec-writer` sizes implementation milestones and skips evidence tooling unless asked.
+- `loop-orchestrator` Workstream mode: one implementer agent per issue, WIP default 3.
+- Template no longer calls `loop-implement` (deprecated; it never started a run).
+
+## v0.2.0 — 2026-11-09
+
 - `loop-review` v2: one consolidated review per push. The first review covers the whole PR; later reviews cover only
   new commits, judge every open finding (reply and resolve when fixed, reply "Not fixed" when not), and warn when the
   PR grew past 1.5x its first reviewed size.

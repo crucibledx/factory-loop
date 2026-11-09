@@ -43,3 +43,7 @@ product's folder, and link both PRs to each other. The spec references the final
 
 - Never push to `main`; never merge.
 - Keep the spec under ~400 lines. Split into several specs if it grows beyond that.
+- Size the implementation: each implementation PR should stay under ~1,500 changed lines including tests. If the spec
+  needs more, define milestones in the spec, each closing a group of contract rows and shipping as its own PR.
+- Do not ask for readiness checkers, evidence bundles, or attestation tooling unless Nazar asked for them. The
+  acceptance contract plus CI is the evidence.
