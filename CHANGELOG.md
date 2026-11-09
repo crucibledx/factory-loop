@@ -1,12 +1,14 @@
 # Changelog
 
-## Unreleased
+## v0.3.0 — 2026-11-09
 
 - `implement-spec` owns the PR until CI and the review gate are green: batch fixes, direct thread replies, escalation
   rules instead of a fixed round limit, ~1,500-line PR budget.
 - `spec-writer` sizes implementation milestones and skips evidence tooling unless asked.
 - `loop-orchestrator` Workstream mode: one implementer agent per issue, WIP default 3.
 - Template no longer calls `loop-implement` (deprecated; it never started a run).
+- `engineering-standards` skill v1: org rules for scope, design, architecture, tests, style, and CI, each with a
+  review severity. Read by the implementer, the local `code-reviewer` droid, and the PR review workflow.
 
 ## v0.2.0 — 2026-11-09
 
