@@ -16,6 +16,11 @@ rule; say so there explicitly. Severity hints in brackets tell the reviewer how 
 - No process artifacts in the repo unless the spec asks: adjudication docs, evidence bundles, readiness or attestation
   scripts, review transcripts. The PR body and CI are the record. [P2]
 - Don't add a dependency for something the standard library or an existing dependency already does. [P2]
+- Prefer a maintained open-source library over writing your own when one already solves the problem well. Every new
+  dependency must be checked before it is added, and the PR says so: license compatible with MIT (no GPL/AGPL in
+  shipped code), no known vulnerabilities (`bun audit` / advisories), actively maintained, and an acceptable size,
+  install, and startup-time cost for a CLI compiled with `bun build --compile`. [P1 for an incompatible license or a
+  known vulnerability; P2 for an unchecked or heavy dependency, or for reinventing what a vetted library does]
 
 ## 2. Design
 
