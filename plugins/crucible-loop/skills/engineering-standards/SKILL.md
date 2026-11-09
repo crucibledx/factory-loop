@@ -18,8 +18,9 @@ rule; say so there explicitly. Severity hints in brackets tell the reviewer how 
 - Don't add a dependency for something the standard library or an existing dependency already does. [P2]
 - Prefer a maintained open-source library over writing your own when one already solves the problem well. Every new
   dependency must be checked before it is added, and the PR says so: license compatible with MIT (no GPL/AGPL in
-  shipped code), no known vulnerabilities (`bun audit` / advisories), actively maintained, and an acceptable size,
-  install, and startup-time cost for a CLI compiled with `bun build --compile`. [P1 for an incompatible license or a
+  shipped code), no known vulnerabilities (the package manager's audit and public advisories), actively maintained,
+  and an acceptable size, install, and runtime cost for the product that ships it (binary size and startup for a
+  CLI, bundle size for a web app). [P1 for an incompatible license or a
   known vulnerability; P2 for an unchecked or heavy dependency, or for reinventing what a vetted library does]
 
 ## 2. Design
@@ -59,9 +60,8 @@ layer. [nit]
   export type SyncFileStatus = (typeof SYNC_FILE_STATUSES)[keyof typeof SYNC_FILE_STATUSES]
   ```
   [nit]
-- Formatting is Prettier's job (`semi: false`, `singleQuote: true`, `bracketSpacing: false`, `trailingComma: all`,
-  `printWidth: 120`, `arrowParens: always`). Lint is ESLint with `simple-import-sort` and `consistent-type-imports`.
-  Reviewers never comment on what these tools enforce.
+- Formatting and lint belong to the repo's Prettier and ESLint configs. Reviewers never comment on what these tools
+  enforce.
 - Names say what a thing is in the domain's words; no `utils.ts` grab bags, no `helpers2`. [nit]
 - Comments explain why, not what. No commented-out code. [nit]
 
@@ -77,8 +77,7 @@ layer. [nit]
 
 ## 6. Git, CI, and releases
 
-- Commit style per repo (`feat|fix(v0.x.y): …` in forge-cli, `v0.x.y: …` in web and forge-skills-starter,
-  `feat|fix|docs: …` elsewhere). [nit]
+- Commits follow the repo's commit style from its `AGENTS.md` or loop contract. [nit]
 - CI must be green: format check, lint, typecheck, tests, build. A PR never disables or skips a check to get green. [P1]
 - Version bumps, tags, and publishing happen only in a release PR or when the spec says so. [P1]
 - Docs: update the README, `AGENTS.md`, or `docs/` when the change alters a command, config key, or workflow users
