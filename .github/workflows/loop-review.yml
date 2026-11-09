@@ -2,10 +2,10 @@ name: Loop / review
 
 # One check that both reviews and gates the PR:
 # - pull_request: full review on the first non-draft push, then follow-up reviews of new commits only.
-# - pull_request_review / pull_request_review_comment: no model run; re-evaluates the gate (for example after a reply
-#   or a manually resolved thread followed by a comment).
-# The job fails while reviewer threads with a blocking severity stay unresolved, so a ruleset can require it.
-# Callers must run this job on every PR event they subscribe to: a skipped job counts as a passing required check.
+# - pull_request_review: no model run; re-evaluates the gate, e.g. after Nazar resolves a thread and submits a review.
+#   (pull_request_review_comment and pull_request_review_thread don't count for required checks.)
+# The job fails while reviewer threads with a blocking severity stay unresolved, or while the checked-out commit has
+# no completed review, so a ruleset can require it.
 
 on:
   workflow_call:
@@ -41,8 +41,7 @@ jobs:
   review:
     if: |
       (github.event_name == 'pull_request' && github.event.pull_request.draft == false) ||
-      (contains(fromJSON('["pull_request_review","pull_request_review_comment"]'), github.event_name) &&
-       github.event.pull_request.draft == false)
+      (github.event_name == 'pull_request_review' && github.event.pull_request.draft == false)
     runs-on: ubuntu-latest
     timeout-minutes: 45
     concurrency:

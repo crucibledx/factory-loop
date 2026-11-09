@@ -58,12 +58,37 @@ query($owner: String!, $name: String!, $pr: Int!, $after: String) {
         pageInfo { hasNextPage endCursor }
         nodes {
           id isResolved isOutdated path line
-          comments(first: 30) { nodes { databaseId body author { login } } }
+          comments(first: 100) {
+            pageInfo { hasNextPage endCursor }
+            nodes { databaseId body author { login } }
+          }
         }
       }
     }
   }
 }"""
+
+THREAD_COMMENTS_QUERY = """
+query($id: ID!, $after: String) {
+  node(id: $id) {
+    ... on PullRequestReviewThread {
+      comments(first: 100, after: $after) {
+        pageInfo { hasNextPage endCursor }
+        nodes { databaseId body author { login } }
+      }
+    }
+  }
+}"""
+
+
+def thread_comments(node):
+    comments = list(node["comments"]["nodes"])
+    page = node["comments"].get("pageInfo") or {}
+    while page.get("hasNextPage"):
+        more = graphql(THREAD_COMMENTS_QUERY, id=node["id"], after=page["endCursor"])["node"]["comments"]
+        comments += more["nodes"]
+        page = more["pageInfo"]
+    return comments
 
 
 def reviewer_login():
@@ -81,13 +106,13 @@ def threads():
         data = graphql(THREADS_QUERY, owner=owner, name=name, pr=int(env("PR")), after=after)
         page = data["repository"]["pullRequest"]["reviewThreads"]
         for node in page["nodes"]:
-            comments = node["comments"]["nodes"]
-            if not comments:
+            first = (node["comments"]["nodes"] or [None])[0]
+            if not first:
                 continue
-            first = comments[0]
             mark = FINDING_MARK.search(first["body"] or "")
             if not (is_reviewer((first.get("author") or {}).get("login")) and mark):
                 continue
+            comments = thread_comments(node)
             out.append({
                 "id": node["id"],
                 "comment_id": first["databaseId"],
@@ -126,10 +151,26 @@ def git(*args):
     return subprocess.run(["git", *args], capture_output=True, text=True, check=False)
 
 
+def checked_out_head():
+    out = git("rev-parse", "HEAD")
+    if out.returncode != 0:
+        sys.exit(f"cannot read the checked-out commit: {out.stderr.strip()}")
+    return out.stdout.strip()
+
+
+def ensure_commit(sha):
+    if git("cat-file", "-e", f"{sha}^{{commit}}").returncode != 0:
+        fetched = git("fetch", "--quiet", "origin", sha)
+        if fetched.returncode != 0:
+            sys.exit(f"cannot fetch {sha}: {fetched.stderr.strip()}")
+
+
 def collect():
     os.makedirs(OUT, exist_ok=True)
     pr = request("GET", f"/repos/{env('REPO')}/pulls/{env('PR')}")
-    head, base = pr["head"]["sha"], pr["base"]["sha"]
+    # Review exactly what is checked out; a newer push gets its own run.
+    head, base = checked_out_head(), pr["base"]["sha"]
+    ensure_commit(base)
     size = pr["additions"] + pr["deletions"]
     marker = last_review_marker()
     event = os.environ.get("EVENT_NAME", "pull_request")
@@ -141,6 +182,8 @@ def collect():
         mode = "full"
     since = marker["sha"] if mode == "followup" else base
     diff = git("diff", "--unified=5", f"{since}...{head}" if mode == "full" else f"{since}..{head}")
+    if diff.returncode != 0:
+        sys.exit(f"git diff {since} {head} failed: {diff.stderr.strip()}")
     with open(f"{OUT}/diff.patch", "w", encoding="utf-8") as fh:
         fh.write(diff.stdout)
     first_size = marker["first_size"] if marker and marker["first_size"] else size
@@ -233,48 +276,78 @@ def post():
     nits = [n for n in result.get("nits", []) if n]
     if nits:
         lines += ["", "<details><summary>Non-blocking nits</summary>", ""] + [f"- {n}" for n in nits] + ["", "</details>"]
-    lines.append(f"\n<!-- crucible-review sha={head} first_size={context['first_size']} -->")
     comments = [
         {"path": f["path"], "line": int(f["line"]), "side": "RIGHT", "body": finding_body(f)}
         for f in findings
     ]
-    payload = {"commit_id": head, "event": "COMMENT", "body": "\n".join(lines), "comments": comments}
+    marker = f"\n<!-- crucible-review sha={head} first_size={context['first_size']} -->"
+    payload = {"commit_id": head, "event": "COMMENT", "body": "\n".join(lines) + marker, "comments": comments}
     try:
         request("POST", f"/repos/{env('REPO')}/pulls/{env('PR')}/reviews", payload)
     except RuntimeError as err:
         if "422" not in str(err):
             raise
-        # Lines outside the diff are rejected; post inline what fits, the rest in the review body.
-        inline, rest = [], []
-        for comment in comments:
-            try:
-                request("POST", f"/repos/{env('REPO')}/pulls/{env('PR')}/comments",
-                        {**comment, "commit_id": head})
-                inline.append(comment)
-            except RuntimeError:
-                rest.append(comment)
-        body = payload["body"]
-        if rest:
-            body += "\n\n#### Findings outside the diff\n" + "\n".join(
-                f"- `{c['path']}:{c['line']}` {FINDING_MARK.sub('', c['body']).strip()}" for c in rest
-            )
-        request("POST", f"/repos/{env('REPO')}/pulls/{env('PR')}/reviews",
-                {"commit_id": head, "event": "COMMENT", "body": body})
+        post_fallback(head, "\n".join(lines), marker, comments)
     print(json.dumps({"findings": counts, "followed": followed}))
 
 
+def post_comment(comment, head):
+    """Post one finding as a thread: on its line, else on its file. Returns False if neither is accepted."""
+    url = f"/repos/{env('REPO')}/pulls/{env('PR')}/comments"
+    try:
+        request("POST", url, {**comment, "commit_id": head})
+        return True
+    except RuntimeError:
+        pass
+    location = f"`{comment['path']}:{comment['line']}`\n\n"
+    try:
+        request("POST", url, {"path": comment["path"], "subject_type": "file", "commit_id": head,
+                              "body": location + comment["body"]})
+        return True
+    except RuntimeError:
+        return False
+
+
+def post_fallback(head, body, marker, comments):
+    """Inline review was rejected (a line outside the diff). Thread what fits; blocking leftovers fail the run."""
+    blocking = blocking_severities()
+    rest = [c for c in comments if not post_comment(c, head)]
+    if rest:
+        body += "\n\n#### Findings that could not be posted as threads\n" + "\n".join(
+            f"- `{c['path']}:{c['line']}` {FINDING_MARK.sub('', c['body']).strip()}" for c in rest
+        )
+    unthreaded = [c for c in rest if FINDING_MARK.search(c["body"]).group(1) in blocking]
+    # Without a thread the gate cannot track a blocking finding, so this head stays unreviewed (no marker).
+    request("POST", f"/repos/{env('REPO')}/pulls/{env('PR')}/reviews",
+            {"commit_id": head, "event": "COMMENT", "body": body + ("" if unthreaded else marker)})
+    if unthreaded:
+        sys.exit(f"{len(unthreaded)} blocking finding(s) could not be posted as review threads; see the review body")
+
+
+def blocking_severities():
+    return [s.strip() for s in os.environ.get("BLOCKING_SEVERITIES", "P0,P1").split(",") if s.strip()]
+
+
 def gate():
-    blocking = [s.strip() for s in os.environ.get("BLOCKING_SEVERITIES", "P0,P1").split(",") if s.strip()]
+    blocking = blocking_severities()
+    head = checked_out_head()
+    marker = last_review_marker()
+    if not (marker and head.startswith(marker["sha"])):
+        report(f"No completed review for {head[:7]} yet. The review run for this commit sets this check.")
+        sys.exit(1)
     open_blocking = [t for t in threads() if not t["resolved"] and t["severity"] in blocking]
     lines = [f"Unresolved blocking review threads ({'/'.join(blocking)}): {len(open_blocking)}"]
     lines += [f"- {t['severity']} `{t['path']}:{t['line']}` {t['finding'].splitlines()[0][:120]}" for t in open_blocking]
-    report = "\n".join(lines)
-    print(report)
+    report("\n".join(lines))
+    sys.exit(1 if open_blocking else 0)
+
+
+def report(text):
+    print(text)
     summary = os.environ.get("GITHUB_STEP_SUMMARY")
     if summary:
         with open(summary, "a", encoding="utf-8") as fh:
-            fh.write(report + "\n")
-    sys.exit(1 if open_blocking else 0)
+            fh.write(text + "\n")
 
 
 if __name__ == "__main__":
