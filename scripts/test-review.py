@@ -28,6 +28,8 @@ state = {"reviews": [{"user": {"login": "github-actions[bot]"}, "body": f"<!-- c
 
 def fake_graphql(query, **variables):
     calls.append(("graphql", query.split("(")[0].strip(), variables))
+    if state.get("resolve_forbidden") and "resolveReviewThread" in query:
+        raise RuntimeError('[{"type": "FORBIDDEN"}]')
     if "reviewThreads" in query:
         return {"repository": {"pullRequest": {"reviewThreads": {
             "pageInfo": {"hasNextPage": False, "endCursor": None}, "nodes": NODES}}}}
@@ -129,6 +131,14 @@ with tempfile.TemporaryDirectory() as out:
     reviews = [c for c in calls if c[0] == "POST" and c[1].endswith("/reviews")]
     check("an unthreadable P2 finding goes to the body and does not block", code == 0
           and "crucible-review sha=" in reviews[-1][2]["body"])
+
+    state["resolve_forbidden"] = True
+    state["reject_inline"] = False
+    calls.clear()
+    code = exit_code(lr.post)
+    reviews = [c for c in calls if c[0] == "POST" and c[1].endswith("/reviews")]
+    check("a failed resolve still posts the review, then fails the run", len(reviews) == 1 and code not in (0, None))
+    state["resolve_forbidden"] = False
 
     os.remove(f"{out}/result.json")
     check("missing result.json fails the job", exit_code(lr.post) not in (0, None))

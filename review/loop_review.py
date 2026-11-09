@@ -241,6 +241,7 @@ def post():
     head = context["head"]
     by_id = {t["id"]: t for t in context["open_threads"]}
     followed = {"fixed": 0, "not_fixed": 0, "accepted": 0}
+    unresolved = []
     for verdict in result.get("threads", []):
         thread = by_id.get(verdict.get("id"))
         if not thread:
@@ -249,11 +250,11 @@ def post():
         note = (verdict.get("note") or "").strip()
         if kind in ("fixed", "obsolete"):
             reply(thread["comment_id"], f"Fixed in {head[:7]}." + (f" {note}" if note else ""))
-            resolve(thread["id"])
+            try_resolve(thread, unresolved)
             followed["fixed"] += 1
         elif kind == "accepted":
             reply(thread["comment_id"], f"Reason accepted, resolving. {note}".strip())
-            resolve(thread["id"])
+            try_resolve(thread, unresolved)
             followed["accepted"] += 1
         elif kind == "not_fixed":
             reply(thread["comment_id"], f"Not fixed in {head[:7]}: {note or 'the issue is still present.'}")
@@ -289,6 +290,16 @@ def post():
             raise
         post_fallback(head, "\n".join(lines), marker, comments)
     print(json.dumps({"findings": counts, "followed": followed}))
+    if unresolved:
+        sys.exit(f"could not resolve {len(unresolved)} thread(s) judged fixed; the token needs contents: write. "
+                 + "; ".join(unresolved))
+
+
+def try_resolve(thread, unresolved):
+    try:
+        resolve(thread["id"])
+    except RuntimeError as err:
+        unresolved.append(f"{thread['path']}:{thread['line']} ({str(err)[:120]})")
 
 
 def post_comment(comment, head):

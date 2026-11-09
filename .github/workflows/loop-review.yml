@@ -48,7 +48,7 @@ jobs:
       group: loop-review-${{ github.repository }}-${{ github.event.pull_request.number }}-${{ github.event_name }}
       cancel-in-progress: true
     permissions:
-      contents: read
+      contents: write # resolveReviewThread is refused to the Actions token without it
       pull-requests: write
     env:
       GH_TOKEN: ${{ github.token }}
