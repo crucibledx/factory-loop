@@ -42,8 +42,9 @@ Open the PR as draft first so the hosted review runs once on a complete change, 
    `gh api repos/<owner>/<repo>/pulls/<n>/comments/<comment_id>/replies -f body="Fixed in <sha>: <what changed>"`.
    If you disagree or the finding is out of scope, reply with the reason and the follow-up issue link instead. Do not
    resolve the reviewer's threads yourself; the follow-up review resolves them after checking. If the reply fails
-   with "one pending review per pull request", someone using the same GitHub account has an unsubmitted review: do
-   not submit or discard it; post one PR comment listing each thread and your answer instead, and tell Nazar.
+   with "one pending review per pull request", Nazar has an unsubmitted review on the PR (agents use his account).
+   Do not submit or discard it, and do not push: ask Nazar where the work was requested to submit or discard his
+   review, wait, then post the replies and continue. The follow-up review reads only thread replies.
 5. **Push once.** One push per round, not one per finding. If the round had replies only (no code change), push an
    empty commit (`git commit --allow-empty -m "chore: request follow-up review"`) so the follow-up review judges
    the replies; nothing else re-runs it.
