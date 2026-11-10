@@ -1,8 +1,7 @@
-# Ties auto-merge to an allowed approver's approval of the current head.
-# - An approval from a login in `approvers` turns on GitHub auto-merge for the approved commit. GitHub then merges once
-#   the branch ruleset is satisfied (required approval, required checks, resolved conversations); this workflow
-#   checks nothing itself.
-# - A new push turns auto-merge off again, so it never carries over to commits nobody in `approvers` approved.
+# Keeps GitHub auto-merge tied to an allowed approver's approval of the current head.
+# On every review and every push it re-reads the PR and sets auto-merge on exactly when a login in `approvers` has
+# approved the head commit (scripts/automerge.sh). GitHub then merges once the branch ruleset is satisfied (required
+# approval, required checks, resolved conversations); this workflow checks nothing else itself.
 # It runs as the crucible-smith app so the merge triggers push workflows (merges made with GITHUB_TOKEN don't).
 name: Loop / auto-merge
 
@@ -18,7 +17,9 @@ on:
         type: string
         default: squash
       loop_ref:
-        description: Ref of crucibledx/factory-loop to load scripts/automerge.sh from.
+        description: >-
+          Trusted ref of crucibledx/factory-loop to load scripts/automerge.sh from. The script runs with the app token,
+          so never point this at a PR head.
         type: string
         default: v0
     secrets:
@@ -29,14 +30,14 @@ on:
 jobs:
   automerge:
     if: >-
-      (github.event_name == 'pull_request_review' &&
-       github.event.review.state == 'approved' &&
-       !github.event.pull_request.draft &&
-       contains(format(',{0},', inputs.approvers), format(',{0},', github.event.review.user.login))) ||
-      (github.event_name == 'pull_request' && github.event.action == 'synchronize' &&
-       github.event.pull_request.auto_merge != null)
+      github.event_name == 'pull_request_review' ||
+      (github.event_name == 'pull_request' && github.event.action == 'synchronize')
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    # One run per PR at a time; each run re-reads the current state, so a queued run supersedes an older one.
+    concurrency:
+      group: loop-automerge-${{ github.repository }}-${{ github.event.pull_request.number }}
+      cancel-in-progress: false
     permissions:
       contents: read
     steps:
@@ -70,13 +71,12 @@ jobs:
           permission-contents: write
           permission-pull-requests: write
           permission-workflows: write
-      - name: Update auto-merge
+      - name: Reconcile auto-merge
         if: steps.config.outputs.enabled == 'true'
         env:
           GH_TOKEN: ${{ steps.smith.outputs.token }}
           REPO: ${{ github.repository }}
           PR: ${{ github.event.pull_request.number }}
-          SHA: ${{ github.event.review.commit_id }}
+          APPROVERS: ${{ inputs.approvers }}
           METHOD: ${{ inputs.merge_method }}
-          MODE: ${{ github.event_name == 'pull_request' && 'disable' || 'enable' }}
-        run: sh .factory-loop/scripts/automerge.sh "$MODE"
+        run: sh .factory-loop/scripts/automerge.sh
