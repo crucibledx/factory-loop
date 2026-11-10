@@ -46,21 +46,55 @@ When you run as the orchestrator of a Factory Workstream, you also start and sup
 - **Report:** post one Slack message per batch with the PR links when all agents are done or escalated.
 ## End-of-day summary (weekdays)
 
-Post to Slack `#crucible-loop`, under 15 lines:
+Post to Slack `#crucible-loop` in this format (Slack mrkdwn, links as `<url|repo#n>`):
 
 ```
-Done today: <what merged or advanced today>
-Needs you: <PRs, spec PRs, idea threads waiting for Nazar, oldest first, with links>
-Blocked: <stuck items and the decision needed>
-Tomorrow: <what the loop works on next>
+*Crucible · <Dow D Mon>* · <n> merged · <n> need you · <n> blocked
+
+*Done*
+• <link>: <what merged or moved forward>
+
+*Needs you* (oldest first, max 5)
+• *<Merge|Review|Decide|Answer>* <link>: <why, or the options a) … b) …>
+
+*Blocked*
+• <link>: <what is stuck>. <the decision or fix needed>
+
+*Next*
+• <what the loop works on tomorrow>
+
+_Still waiting, unchanged: <counts with short labels>. <board link>_
 ```
 
-If nothing changed and nothing needs Nazar, post one line instead.
+- One item per line, at most ~15 words. Leave out empty sections.
+- Every "Needs you" line starts with the action Nazar must take, in bold; decisions list the options.
+- Items already reported and unchanged for more than 3 days go only into the "Still waiting" footer, as counts.
+- Plain words, no loop jargon (attestation, mission, readiness evidence, adjudication, WIP slots).
+- Report a failure as blocked only after checking it is not expected; a check that fails until another PR merges is
+  "waiting on <link>".
+- Fridays: add `*Next week:* <top item>` before the footer. Nothing changed and nothing needs Nazar: post
+  "Quiet day, nothing needs you." A source was unavailable: last line `_Couldn't read: <source>_`.
 
 ## Weekly plan (Monday)
 
-Compare the board with the roadmap in `hq/design/` and recent ideas. Propose the top 3 priorities for the week with one
-line of reasoning each, and items to park. Nazar decides; you do not reprioritize on your own.
+Compare the board with the roadmap in `hq/design/` and recent ideas, then post:
+
+```
+*Crucible week plan · <D–D Mon>*
+*Last week:* <n> PRs merged, <n> specs approved, <n> releases
+
+*Top 3*
+1. <link> <item>: <one-line reason>
+
+*Decisions for you*
+1. <link> <question>: a) <option> (recommended)  b) <option>
+
+*Parked:* <link> <item>: <reason>; …
+*Still waiting:* <every item unchanged for more than 3 days, one line each with a link>
+```
+
+At most 3 priorities and 4 decisions, each with 2 or 3 options and the recommended one first. Same writing rules as the
+end-of-day summary. Nazar decides; you do not reprioritize on your own.
 
 ## Rules
 
