@@ -20,5 +20,6 @@ Org context: `crucibledx/hq` `AGENTS.md`.
 - Workflows lint: `actionlint .github/workflows/*.yml templates/repo/.github/workflows/*.yml`.
 - Review helper: `python3 scripts/test-review.py`.
 - Guard hook: `sh scripts/test-guard.sh`.
+- Auto-merge script: `sh scripts/test-automerge.sh`.
 
 Commits: `feat: ...`, `fix: ...`, `docs: ...`. Tag releases `v0.x.y` and move the `v0` tag.

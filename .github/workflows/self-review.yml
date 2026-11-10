@@ -19,6 +19,10 @@ jobs:
     secrets: inherit
 
   automerge:
-    if: github.event_name == 'pull_request_review' && github.event.review.state == 'approved'
+    if: >-
+      (github.event_name == 'pull_request_review' && github.event.review.state == 'approved') ||
+      (github.event_name == 'pull_request' && github.event.action == 'synchronize')
     uses: ./.github/workflows/loop-automerge.yml
+    with:
+      loop_ref: ${{ github.event.pull_request.head.sha }}
     secrets: inherit

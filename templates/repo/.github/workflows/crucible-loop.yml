@@ -36,8 +36,11 @@ jobs:
     secrets: inherit
 
   # Your approval turns on auto-merge; GitHub merges once the ruleset's checks and conversations are satisfied.
+  # A new push turns it off until you approve the new head.
   automerge:
-    if: github.event_name == 'pull_request_review' && github.event.review.state == 'approved'
+    if: >-
+      (github.event_name == 'pull_request_review' && github.event.review.state == 'approved') ||
+      (github.event_name == 'pull_request' && github.event.action == 'synchronize')
     uses: crucibledx/factory-loop/.github/workflows/loop-automerge.yml@v0
     secrets: inherit
 
