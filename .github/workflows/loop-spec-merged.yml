@@ -4,10 +4,10 @@ on:
   workflow_call:
     secrets:
       SMITH_PRIVATE_KEY:
-        description: Private key of the crucible-smith GitHub App (its id is the SMITH_APP_ID variable)
+        description: Private key of the crucible-smith GitHub App (its client ID is the SMITH_CLIENT_ID variable)
         required: false
       LOOP_GH_TOKEN:
-        description: Fallback when SMITH_APP_ID is not set. Fine-grained token with Issues read/write on the target repos
+        description: Fallback when SMITH_CLIENT_ID is not set. Fine-grained token with Issues read/write on the target repos
         required: false
 
 jobs:
@@ -23,10 +23,10 @@ jobs:
           fetch-depth: 0
       - name: Get crucible-smith token
         id: smith
-        if: vars.SMITH_APP_ID != ''
-        uses: actions/create-github-app-token@v3
+        if: vars.SMITH_CLIENT_ID != ''
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0, pinned: handles the app's private key
         with:
-          app-id: ${{ vars.SMITH_APP_ID }}
+          client-id: ${{ vars.SMITH_CLIENT_ID }}
           private-key: ${{ secrets.SMITH_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
           permission-issues: write
@@ -39,7 +39,7 @@ jobs:
           SERVER: ${{ github.server_url }}
         run: |
           set -euo pipefail
-          [ -n "$GH_TOKEN" ] || { echo "::error::Set the SMITH_APP_ID variable and SMITH_PRIVATE_KEY secret (or LOOP_GH_TOKEN)."; exit 1; }
+          [ -n "$GH_TOKEN" ] || { echo "::error::Set the SMITH_CLIENT_ID variable and SMITH_PRIVATE_KEY secret (or LOOP_GH_TOKEN)."; exit 1; }
           if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then BEFORE="$AFTER~1"; fi
           changed=$(git diff --name-only --diff-filter=AM "$BEFORE" "$AFTER" -- 'specs/*.md' | grep -v -E '(^|/)(_template|README)\.md$' || true)
           [ -z "$changed" ] && { echo "No spec changes."; exit 0; }

@@ -24,7 +24,7 @@ on:
         default: v0
     secrets:
       SMITH_PRIVATE_KEY:
-        description: Private key of the crucible-smith GitHub App (its id is the SMITH_APP_ID variable)
+        description: Private key of the crucible-smith GitHub App (its client ID is the SMITH_CLIENT_ID variable)
         required: false
 
 jobs:
@@ -44,10 +44,10 @@ jobs:
       - name: Check configuration
         id: config
         env:
-          APP_ID: ${{ vars.SMITH_APP_ID }}
+          CLIENT_ID: ${{ vars.SMITH_CLIENT_ID }}
         run: |
-          if [ -z "$APP_ID" ]; then
-            echo "::notice::SMITH_APP_ID is not set for this repo; auto-merge skipped. Merge by hand."
+          if [ -z "$CLIENT_ID" ]; then
+            echo "::notice::SMITH_CLIENT_ID is not set for this repo; auto-merge skipped. Merge by hand."
             echo "enabled=false" >> "$GITHUB_OUTPUT"
           else
             echo "enabled=true" >> "$GITHUB_OUTPUT"
@@ -62,9 +62,9 @@ jobs:
       - name: Get crucible-smith token
         id: smith
         if: steps.config.outputs.enabled == 'true'
-        uses: actions/create-github-app-token@v3
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0, pinned: handles the app's private key
         with:
-          app-id: ${{ vars.SMITH_APP_ID }}
+          client-id: ${{ vars.SMITH_CLIENT_ID }}
           private-key: ${{ secrets.SMITH_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
           repositories: ${{ github.event.repository.name }}
