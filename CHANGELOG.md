@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- `loop-spec-merged` authenticates as the `crucible-smith` GitHub App (`SMITH_APP_ID` variable, `SMITH_PRIVATE_KEY`
+  secret). `LOOP_GH_TOKEN` is now an optional fallback.
+
 ## v0.3.0 — 2026-11-09
 
 - `implement-spec` owns the PR until CI and the review gate are green: batch fixes, direct thread replies, escalation

@@ -3,9 +3,12 @@ name: Loop / spec merged
 on:
   workflow_call:
     secrets:
+      SMITH_PRIVATE_KEY:
+        description: Private key of the crucible-smith GitHub App (its id is the SMITH_APP_ID variable)
+        required: false
       LOOP_GH_TOKEN:
-        description: Fine-grained token with Issues read/write on the crucibledx repos specs can target
-        required: true
+        description: Fallback when SMITH_APP_ID is not set. Fine-grained token with Issues read/write on the target repos
+        required: false
 
 jobs:
   dispatch:
@@ -18,15 +21,25 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Get crucible-smith token
+        id: smith
+        if: vars.SMITH_APP_ID != ''
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.SMITH_APP_ID }}
+          private-key: ${{ secrets.SMITH_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          permission-issues: write
       - name: Create loop:implement issues for approved specs
         env:
-          GH_TOKEN: ${{ secrets.LOOP_GH_TOKEN }}
+          GH_TOKEN: ${{ steps.smith.outputs.token || secrets.LOOP_GH_TOKEN }}
           BEFORE: ${{ github.event.before }}
           AFTER: ${{ github.sha }}
           REPO: ${{ github.repository }}
           SERVER: ${{ github.server_url }}
         run: |
           set -euo pipefail
+          [ -n "$GH_TOKEN" ] || { echo "::error::Set the SMITH_APP_ID variable and SMITH_PRIVATE_KEY secret (or LOOP_GH_TOKEN)."; exit 1; }
           if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then BEFORE="$AFTER~1"; fi
           changed=$(git diff --name-only --diff-filter=AM "$BEFORE" "$AFTER" -- 'specs/*.md' | grep -v -E '(^|/)(_template|README)\.md$' || true)
           [ -z "$changed" ] && { echo "No spec changes."; exit 0; }
