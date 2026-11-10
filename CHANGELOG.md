@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.4.0 — 2026-11-10
 
 - New `loop-automerge` workflow: auto-merge is on exactly while an allowed approver (default `NazarUsik`) has
   approved the current head, set by the `crucible-smith` app on every review and push. The template calls it, and
@@ -9,6 +9,10 @@
   `SMITH_PRIVATE_KEY` secret). `LOOP_GH_TOKEN` is now an optional fallback.
 - App tokens use the app's client ID (`SMITH_CLIENT_ID` variable) instead of the deprecated `app-id` input of
   `actions/create-github-app-token`, pinned to the v3.3.0 commit.
+- `implement-spec` writes `Closes #N` only when the PR finishes the issue and `Part of #N` when the work is split;
+  `loop-orchestrator` closes split issues after their last PR merges.
+- `loop-orchestrator` end-of-day and weekly summaries use a short Slack format: counts, Done, Needs you, Blocked,
+  Next.
 
 ## v0.3.0 — 2026-11-09
 
