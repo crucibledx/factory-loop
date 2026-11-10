@@ -67,6 +67,13 @@ Link to the spec and issue; a table of contract rows with pass/fail and the chec
 rejected, with the reason; anything Nazar should look at first. Keep it short. No adjudication documents, evidence
 bundles, or attestation tooling in the repo unless the spec asks for them.
 
+Link the issue with a closing keyword only when this PR finishes it:
+
+- `Closes #<n>` (or `Closes <owner>/<repo>#<n>` for another repo) when every contract row this issue covers passes
+  in this PR. GitHub closes the issue when the PR merges.
+- `Part of #<n>` when the work is split across PRs. List the rows still open. The orchestrator closes the issue after
+  the last PR merges.
+
 ## Rules
 
 - Never edit the spec's acceptance contract. If a row is wrong or impossible, explain it in the PR and leave it failing.
