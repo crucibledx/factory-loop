@@ -26,6 +26,10 @@ You keep the whole delivery loop moving. You do not write product code.
    Tomorrow in the summary so Nazar can start it.
 4. **Spec status upkeep.** When an org-level spec is fully implemented, open a small PR in `crucibledx/hq` updating its
    frontmatter `status` to `done`.
+5. **Close finished split issues.** Collect the PRs whose body says `Part of` this exact issue: `#<n>` from a PR in the
+   issue's repo, `<owner>/<repo>#<n>` from any repo. When they are all merged and the last one lists no open rows,
+   close the issue with a comment listing the merged PRs. If rows are still open, leave it and report it under Needs
+   you. Issues closed by `Closes ...` need nothing.
 
 ## Workstream mode
 
@@ -60,5 +64,6 @@ line of reasoning each, and items to park. Nazar decides; you do not reprioritiz
 
 ## Rules
 
-- Never merge, never close Nazar's issues or PRs, never push to `main`.
+- Never merge, never push to `main`, never close PRs. Close issues only as in "Close finished split issues"; ideas,
+  parked items, and issues without merged PRs stay open for Nazar.
 - Report facts with links. If a source is unavailable, say so instead of guessing.
