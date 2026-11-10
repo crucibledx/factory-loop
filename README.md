@@ -17,7 +17,7 @@ idea (Slack / hq issue) → discovery brief → spec PR ──merge──▶ loo
 | `plugins/crucible-loop/skills/`       | `idea-discovery`, `spec-writer`, `acceptance-contract`, `implement-spec`, `loop-orchestrator`, `engineering-standards` |
 | `plugins/crucible-loop/droids/`       | `researcher`, `spec-reviewer-arch`, `spec-reviewer-product`, `code-reviewer`, `verifier` |
 | `plugins/crucible-loop/hooks/`        | Guard: blocks pushes to `main`, force pushes, and PR merges             |
-| `.github/workflows/loop-*.yml`        | Reusable workflows: review + merge gate, `@droid` mentions, spec merged (`loop-implement` is deprecated) |
+| `.github/workflows/loop-*.yml`        | Reusable workflows: review + merge gate, auto-merge on approval, `@droid` mentions, spec merged (`loop-implement` is deprecated) |
 | `templates/repo/`                     | The thin per-repo files: caller workflow, `.factory/settings.json`, `.factory/loop-contract.md` |
 
 ## Add the loop to a repo
@@ -38,6 +38,17 @@ Secrets, set once:
   `LOOP_GH_TOKEN` (fine-grained token, Issues read/write) still works as a fallback when the variable is not set.
 
 The Factory Droid GitHub App must be installed on the org; workflows authenticate through it.
+
+## Auto-merge
+
+When an allowed approver (input `approvers`, default `NazarUsik`) approves a PR, `loop-automerge` turns on GitHub
+auto-merge for the approved commit, as the `crucible-smith` app. Every review and push re-checks it, so a new push
+turns it off until the new head is approved. GitHub merges once the branch ruleset is satisfied,
+so the ruleset is what makes it safe: require 1 approval from a code owner (`.github/CODEOWNERS`: `* @NazarUsik`),
+dismissed on new pushes, resolved conversations, and the
+`review / review` check plus the repo's CI checks. The repo also needs "Allow auto-merge" turned on and the
+`SMITH_APP_ID` variable and `SMITH_PRIVATE_KEY` secret. Without them the job skips with a notice. Private repos on the
+Free plan have no rulesets or auto-merge; merge those by hand.
 
 ## Use the plugin locally
 

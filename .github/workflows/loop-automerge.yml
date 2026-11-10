@@ -1,0 +1,82 @@
+# Keeps GitHub auto-merge tied to an allowed approver's approval of the current head.
+# On every review and every push it re-reads the PR and sets auto-merge on exactly when a login in `approvers` has
+# approved the head commit (scripts/automerge.sh). GitHub then merges once the branch ruleset is satisfied (required
+# approval, required checks, resolved conversations); this workflow checks nothing else itself.
+# It runs as the crucible-smith app so the merge triggers push workflows (merges made with GITHUB_TOKEN don't).
+name: Loop / auto-merge
+
+on:
+  workflow_call:
+    inputs:
+      approvers:
+        description: Comma-separated GitHub logins whose approval turns on auto-merge
+        type: string
+        default: NazarUsik
+      merge_method:
+        description: squash, merge, or rebase
+        type: string
+        default: squash
+      loop_ref:
+        description: >-
+          Trusted ref of crucibledx/factory-loop to load scripts/automerge.sh from. The script runs with the app token,
+          so never point this at a PR head.
+        type: string
+        default: v0
+    secrets:
+      SMITH_PRIVATE_KEY:
+        description: Private key of the crucible-smith GitHub App (its id is the SMITH_APP_ID variable)
+        required: false
+
+jobs:
+  automerge:
+    if: >-
+      github.event_name == 'pull_request_review' ||
+      (github.event_name == 'pull_request' && github.event.action == 'synchronize')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # One run per PR at a time; each run re-reads the current state, so a queued run supersedes an older one.
+    concurrency:
+      group: loop-automerge-${{ github.repository }}-${{ github.event.pull_request.number }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+    steps:
+      - name: Check configuration
+        id: config
+        env:
+          APP_ID: ${{ vars.SMITH_APP_ID }}
+        run: |
+          if [ -z "$APP_ID" ]; then
+            echo "::notice::SMITH_APP_ID is not set for this repo; auto-merge skipped. Merge by hand."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v4
+        if: steps.config.outputs.enabled == 'true'
+        with:
+          repository: crucibledx/factory-loop
+          ref: ${{ inputs.loop_ref }}
+          path: .factory-loop
+          persist-credentials: false
+      - name: Get crucible-smith token
+        id: smith
+        if: steps.config.outputs.enabled == 'true'
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.SMITH_APP_ID }}
+          private-key: ${{ secrets.SMITH_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+          permission-pull-requests: write
+          permission-workflows: write
+      - name: Reconcile auto-merge
+        if: steps.config.outputs.enabled == 'true'
+        env:
+          GH_TOKEN: ${{ steps.smith.outputs.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          APPROVERS: ${{ inputs.approvers }}
+          METHOD: ${{ inputs.merge_method }}
+        run: sh .factory-loop/scripts/automerge.sh

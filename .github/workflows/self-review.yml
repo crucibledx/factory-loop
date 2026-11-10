@@ -17,3 +17,13 @@ jobs:
     with:
       loop_ref: ${{ github.event.pull_request.head.sha }}
     secrets: inherit
+
+  # The script runs with the app token, so it comes from main, never from the PR under review.
+  automerge:
+    if: >-
+      github.event_name == 'pull_request_review' ||
+      (github.event_name == 'pull_request' && github.event.action == 'synchronize')
+    uses: ./.github/workflows/loop-automerge.yml
+    with:
+      loop_ref: main
+    secrets: inherit
