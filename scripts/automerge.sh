@@ -31,9 +31,12 @@ eligible=$(printf '%s\n' "$info" | sed -n 3p)
 
 approved=false
 reviews=$(printf '%s\n' "$info" | sed -n '4,$p')
+# GitHub logins are case-insensitive.
+approvers=$(printf '%s' "$APPROVERS" | tr '[:upper:]' '[:lower:]' | tr -d ' ')
 if [ "$eligible" = "true" ] && [ -n "$reviews" ]; then
   while read -r login state oid; do
-    case ",$APPROVERS," in
+    login=$(printf '%s' "$login" | tr '[:upper:]' '[:lower:]')
+    case ",$approvers," in
       *",$login,"*) if [ "$state" = APPROVED ] && [ "$oid" = "$head" ]; then approved=true; fi ;;
     esac
   done <<REVIEWS

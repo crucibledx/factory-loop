@@ -43,6 +43,8 @@ check "already on and approved: no call" 0 "" STUB_PR='abc\ntrue\ntrue\nnazar AP
 check "approval on old commit, on: turn off" 0 "$off" STUB_PR='abc\ntrue\ntrue\nnazar APPROVED old'
 check "approval on old commit, off: no call" 0 "" STUB_PR='abc\nfalse\ntrue\nnazar APPROVED old'
 check "non-approver approval: no call" 0 "" STUB_PR='abc\nfalse\ntrue\nbob APPROVED abc'
+check "login case is ignored" 0 "$on" APPROVERS='NazarUsik, ana' STUB_PR='abc\nfalse\ntrue\nnazarusik APPROVED abc'
+check "login case is ignored (review side)" 0 "$on" STUB_PR='abc\nfalse\ntrue\nNAZAR APPROVED abc'
 check "login prefix is not a match" 0 "" STUB_PR='abc\nfalse\ntrue\nnaz APPROVED abc'
 check "non-approver approval while on: off" 0 "$off" STUB_PR='abc\ntrue\ntrue\nbob APPROVED abc'
 check "changes requested while on: off" 0 "$off" STUB_PR='abc\ntrue\ntrue\nnazar CHANGES_REQUESTED abc'
