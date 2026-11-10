@@ -35,6 +35,12 @@ jobs:
     uses: crucibledx/factory-loop/.github/workflows/loop-review.yml@v0
     secrets: inherit
 
+  # Your approval turns on auto-merge; GitHub merges once the ruleset's checks and conversations are satisfied.
+  automerge:
+    if: github.event_name == 'pull_request_review' && github.event.review.state == 'approved'
+    uses: crucibledx/factory-loop/.github/workflows/loop-automerge.yml@v0
+    secrets: inherit
+
   specs:
     if: github.event_name == 'push'
     uses: crucibledx/factory-loop/.github/workflows/loop-spec-merged.yml@v0

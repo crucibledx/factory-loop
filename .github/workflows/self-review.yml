@@ -17,3 +17,8 @@ jobs:
     with:
       loop_ref: ${{ github.event.pull_request.head.sha }}
     secrets: inherit
+
+  automerge:
+    if: github.event_name == 'pull_request_review' && github.event.review.state == 'approved'
+    uses: ./.github/workflows/loop-automerge.yml
+    secrets: inherit

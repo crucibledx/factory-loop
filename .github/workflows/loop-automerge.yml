@@ -1,0 +1,78 @@
+# Turns on GitHub auto-merge when an allowed approver approves a PR. GitHub then merges once the branch
+# ruleset is satisfied (required approval, required checks, resolved conversations); this workflow checks nothing itself.
+# It runs as the crucible-smith app so the merge triggers push workflows (merges made with GITHUB_TOKEN don't).
+name: Loop / auto-merge
+
+on:
+  workflow_call:
+    inputs:
+      approvers:
+        description: Comma-separated GitHub logins whose approval turns on auto-merge
+        type: string
+        default: NazarUsik
+      merge_method:
+        description: squash, merge, or rebase
+        type: string
+        default: squash
+    secrets:
+      SMITH_PRIVATE_KEY:
+        description: Private key of the crucible-smith GitHub App (its id is the SMITH_APP_ID variable)
+        required: false
+
+jobs:
+  enable:
+    if: >-
+      github.event_name == 'pull_request_review' &&
+      github.event.review.state == 'approved' &&
+      !github.event.pull_request.draft &&
+      contains(format(',{0},', inputs.approvers), format(',{0},', github.event.review.user.login))
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Check configuration
+        id: config
+        env:
+          APP_ID: ${{ vars.SMITH_APP_ID }}
+          METHOD: ${{ inputs.merge_method }}
+        run: |
+          case "$METHOD" in squash|merge|rebase) ;; *) echo "::error::merge_method must be squash, merge, or rebase"; exit 1;; esac
+          if [ -z "$APP_ID" ]; then
+            echo "::notice::SMITH_APP_ID is not set for this repo; auto-merge skipped. Merge by hand."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Get crucible-smith token
+        id: smith
+        if: steps.config.outputs.enabled == 'true'
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.SMITH_APP_ID }}
+          private-key: ${{ secrets.SMITH_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+          permission-pull-requests: write
+          permission-workflows: write
+      - name: Turn on auto-merge for the approved commit
+        if: steps.config.outputs.enabled == 'true'
+        env:
+          GH_TOKEN: ${{ steps.smith.outputs.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          SHA: ${{ github.event.review.commit_id }}
+          METHOD: ${{ inputs.merge_method }}
+        run: |
+          set -euo pipefail
+          if [ "$(gh api "repos/$REPO" --jq .allow_auto_merge)" != "true" ]; then
+            echo "::notice::Auto-merge is not allowed in $REPO (repo settings, or a private repo on the Free plan). Merge by hand."
+            exit 0
+          fi
+          if [ "$(gh pr view "$PR" --repo "$REPO" --json headRefOid --jq .headRefOid)" != "$SHA" ]; then
+            echo "::notice::The PR has commits after the approved one; approve the new head to merge."
+            exit 0
+          fi
+          # --match-head-commit: never merge a commit other than the one that was approved.
+          gh pr merge "$PR" --repo "$REPO" --auto "--$METHOD" --match-head-commit "$SHA"
+          echo "Auto-merge is on for $REPO#$PR at $SHA ($METHOD)."

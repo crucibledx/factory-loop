@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- New `loop-automerge` workflow: an approval from an allowed approver (default `NazarUsik`) turns on auto-merge
+  for the approved commit, as the `crucible-smith` app. The template calls it on `pull_request_review`.
+
 ## v0.3.0 — 2026-11-09
 
 - `implement-spec` owns the PR until CI and the review gate are green: batch fixes, direct thread replies, escalation
