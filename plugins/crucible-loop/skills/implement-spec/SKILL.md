@@ -71,8 +71,8 @@ Link the issue with a closing keyword only when this PR finishes it:
 
 - `Closes #<n>` (or `Closes <owner>/<repo>#<n>` for another repo) when every contract row this issue covers passes
   in this PR. GitHub closes the issue when the PR merges.
-- `Part of #<n>` when the work is split across PRs. List the rows still open. The orchestrator closes the issue after
-  the last PR merges.
+- `Part of #<n>` (or `Part of <owner>/<repo>#<n>` for another repo) when the work is split across PRs. List the rows
+  still open. The orchestrator closes the issue after the last PR merges.
 
 ## Rules
 
