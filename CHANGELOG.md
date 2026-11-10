@@ -2,9 +2,11 @@
 
 ## Unreleased
 
-- New `loop-automerge` workflow: an approval from an allowed approver (default `NazarUsik`) turns on auto-merge
-  for the approved commit, as the `crucible-smith` app. The template calls it on `pull_request_review`.
-
+- New `loop-automerge` workflow: auto-merge is on exactly while an allowed approver (default `NazarUsik`) has
+  approved the current head, set by the `crucible-smith` app on every review and push. The template calls it, and
+  ships `.github/CODEOWNERS` so rulesets can require that approval.
+- `loop-spec-merged` authenticates as the `crucible-smith` GitHub App (`SMITH_APP_ID` variable, `SMITH_PRIVATE_KEY`
+  secret). `LOOP_GH_TOKEN` is now an optional fallback.
 ## v0.3.0 — 2026-11-09
 
 - `implement-spec` owns the PR until CI and the review gate are green: batch fixes, direct thread replies, escalation
