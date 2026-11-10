@@ -32,8 +32,8 @@ Then edit `.factory/loop-contract.md` with the repo's real check commands. (A `#
 Secrets, set once:
 
 - `FACTORY_API_KEY`: org secret for public repos; repo secret for private repos on the GitHub Free plan.
-- `SMITH_APP_ID` (variable) and `SMITH_PRIVATE_KEY` (secret): the `crucible-smith` GitHub App, used when a merged
-  spec creates `loop:implement` issues in other repos. Set them on the repos that hold specs; for a private repo on
+- `SMITH_CLIENT_ID` (variable, the app's client ID) and `SMITH_PRIVATE_KEY` (secret): the `crucible-smith` GitHub
+  App, used when a merged spec creates `loop:implement` issues in other repos. Set them on the repos that hold specs; for a private repo on
   the GitHub Free plan (`hq`), they must be repo-level, since org variables and secrets don't reach it.
   `LOOP_GH_TOKEN` (fine-grained token, Issues read/write) still works as a fallback when the variable is not set.
 
@@ -47,7 +47,7 @@ turns it off until the new head is approved. GitHub merges once the branch rules
 so the ruleset is what makes it safe: require 1 approval from a code owner (`.github/CODEOWNERS`: `* @NazarUsik`),
 dismissed on new pushes, resolved conversations, and the
 `review / review` check plus the repo's CI checks. The repo also needs "Allow auto-merge" turned on and the
-`SMITH_APP_ID` variable and `SMITH_PRIVATE_KEY` secret. Without them the job skips with a notice. Private repos on the
+`SMITH_CLIENT_ID` variable and `SMITH_PRIVATE_KEY` secret. Without them the job skips with a notice. Private repos on the
 Free plan have no rulesets or auto-merge; merge those by hand.
 
 ## Use the plugin locally

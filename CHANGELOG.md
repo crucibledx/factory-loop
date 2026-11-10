@@ -7,6 +7,8 @@
   ships `.github/CODEOWNERS` so rulesets can require that approval.
 - `loop-spec-merged` authenticates as the `crucible-smith` GitHub App (`SMITH_APP_ID` variable, `SMITH_PRIVATE_KEY`
   secret). `LOOP_GH_TOKEN` is now an optional fallback.
+- App tokens use the app's client ID (`SMITH_CLIENT_ID` variable) instead of the deprecated `app-id` input of
+  `actions/create-github-app-token`, pinned to the v3.3.0 commit.
 ## v0.3.0 — 2026-11-09
 
 - `implement-spec` owns the PR until CI and the review gate are green: batch fixes, direct thread replies, escalation
