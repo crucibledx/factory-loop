@@ -32,8 +32,9 @@ Then edit `.factory/loop-contract.md` with the repo's real check commands. (A `#
 Secrets, set once:
 
 - `FACTORY_API_KEY`: org secret for public repos; repo secret for private repos on the GitHub Free plan.
-- `LOOP_GH_TOKEN`: fine-grained token, Issues read/write on the crucibledx repos, used when a merged spec creates
-  `loop:implement` issues in other repos.
+- `SMITH_APP_ID` (org variable) and `SMITH_PRIVATE_KEY` (org secret): the `crucible-smith` GitHub App, used when a
+  merged spec creates `loop:implement` issues in other repos. Scope both to the repos that hold specs (`hq`).
+  `LOOP_GH_TOKEN` (fine-grained token, Issues read/write) still works as a fallback when the variable is not set.
 
 The Factory Droid GitHub App must be installed on the org; workflows authenticate through it.
 
