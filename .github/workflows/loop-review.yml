@@ -5,7 +5,8 @@ name: Loop / review
 # - pull_request_review: no model run; re-evaluates the gate, e.g. after Nazar resolves a thread and submits a review.
 #   (pull_request_review_comment and pull_request_review_thread don't count for required checks.)
 # The job fails while reviewer threads with a blocking severity stay unresolved, or while the checked-out commit has
-# no completed review, so a ruleset can require it.
+# no completed review, so a ruleset can require it. A gate-only run waits for a review run of the same commit that is
+# still in progress, so it reports that review's verdict instead of a stale failure.
 
 on:
   workflow_call:
@@ -50,6 +51,7 @@ jobs:
     permissions:
       contents: write # resolveReviewThread is refused to the Actions token without it
       pull-requests: write
+      actions: read # find a review run of the same commit that is still in progress
     env:
       GH_TOKEN: ${{ github.token }}
       REPO: ${{ github.repository }}

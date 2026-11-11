@@ -11,6 +11,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 import urllib.error
 import urllib.request
 
@@ -19,6 +20,8 @@ OUT = os.environ.get("LOOP_REVIEW_DIR", ".loop-review")
 REVIEW_MARK = re.compile(r"<!-- crucible-review sha=([0-9a-f]{7,40})(?: first_size=(\d+))? -->")
 FINDING_MARK = re.compile(r"<!-- crucible-finding sev=(P[0-2]) -->")
 SEVERITIES = ("P0", "P1", "P2")
+REVIEW_WAIT_SECONDS = 40 * 60  # below the job timeout
+REVIEW_POLL_SECONDS = 20
 
 
 def env(name, default=None):
@@ -36,11 +39,13 @@ def request(method, path, body=None):
     req.add_header("Accept", "application/vnd.github+json")
     req.add_header("Content-Type", "application/json")
     try:
-        with urllib.request.urlopen(req) as resp:
+        with urllib.request.urlopen(req, timeout=30) as resp:
             raw = resp.read()
             return json.loads(raw) if raw else {}
     except urllib.error.HTTPError as err:
         raise RuntimeError(f"{method} {path} -> {err.code}: {err.read().decode()[:500]}") from err
+    except (urllib.error.URLError, TimeoutError) as err:
+        raise RuntimeError(f"{method} {path} -> {err}") from err
 
 
 def graphql(query, **variables):
@@ -339,11 +344,57 @@ def blocking_severities():
     return [s.strip() for s in os.environ.get("BLOCKING_SEVERITIES", "P0,P1").split(",") if s.strip()]
 
 
+def reviewed(head):
+    marker = last_review_marker()
+    return bool(marker and head.startswith(marker["sha"]))
+
+
+def review_run_active(workflow_id, head):
+    """True while another pull_request run of this workflow on head is unfinished."""
+    runs = request("GET", f"/repos/{env('REPO')}/actions/workflows/{workflow_id}/runs"
+                          f"?event=pull_request&head_sha={head}&per_page=100")
+    own = os.environ.get("GITHUB_RUN_ID")
+    return any(r["status"] != "completed" and str(r["id"]) != own for r in runs.get("workflow_runs", []))
+
+
+def wait_for_review(head):
+    """Whether head has a completed review, after waiting for a review run of head that is still going.
+
+    The newest check run sets the required check, so a gate that runs mid-review (a thread reply fires
+    pull_request_review) must wait for the review's verdict: failing early leaves a stale red check, and
+    passing early would hide a red verdict.
+    """
+    if reviewed(head):
+        return True
+    run_id = os.environ.get("GITHUB_RUN_ID")
+    if not run_id:
+        return False
+    try:
+        workflow_id = request("GET", f"/repos/{env('REPO')}/actions/runs/{run_id}")["workflow_id"]
+        active = review_run_active(workflow_id, head)
+    except RuntimeError as err:
+        print(f"cannot look up review runs: {err}")
+        return reviewed(head)
+    if not active:
+        return reviewed(head)
+    print(f"A review run for {head[:7]} is in progress; waiting for its review.", flush=True)
+    deadline = time.monotonic() + REVIEW_WAIT_SECONDS
+    while time.monotonic() < deadline:
+        time.sleep(REVIEW_POLL_SECONDS)
+        try:
+            if reviewed(head):
+                return True
+            if not review_run_active(workflow_id, head):
+                return reviewed(head)
+        except RuntimeError as err:
+            print(f"polling for the review failed, retrying: {err}", flush=True)
+    return reviewed(head)
+
+
 def gate():
     blocking = blocking_severities()
     head = checked_out_head()
-    marker = last_review_marker()
-    if not (marker and head.startswith(marker["sha"])):
+    if not wait_for_review(head):
         report(f"No completed review for {head[:7]} yet. The review run for this commit sets this check.")
         sys.exit(1)
     open_blocking = [t for t in threads() if not t["resolved"] and t["severity"] in blocking]

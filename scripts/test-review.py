@@ -4,6 +4,7 @@ import json
 import os
 import sys
 import tempfile
+import types
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "review"))
 import loop_review as lr  # noqa: E402
@@ -43,6 +44,12 @@ def fake_request(method, path, body=None):
     calls.append((method, path, body))
     if method == "GET" and "/reviews" in path:
         return state["reviews"]
+    if method == "GET" and path.endswith("/actions/runs/200"):
+        return {"workflow_id": 9}
+    if method == "GET" and "/actions/workflows/9/runs?event=pull_request&head_sha=" + HEAD in path:
+        if state.pop("runs_error", False):
+            raise RuntimeError("GET runs -> 502")
+        return {"workflow_runs": state["runs"]}
     if state["reject_inline"] and path.endswith("/reviews") and body and body.get("comments"):
         raise RuntimeError("POST reviews -> 422: line not in diff")
     if state["reject_inline"] and path.endswith("/pulls/7/comments"):
@@ -85,6 +92,45 @@ state["reviews"] = [{"user": {"login": "github-actions[bot]"}, "body": "<!-- cru
 check("gate fails when the current head has no completed review", exit_code(lr.gate) == 1)
 state["reviews"] = []
 check("gate fails when there is no review at all", exit_code(lr.gate) == 1)
+
+REVIEWED = [{"user": {"login": "github-actions[bot]"}, "body": f"<!-- crucible-review sha={HEAD} -->"}]
+clock = {}
+
+
+def fake_sleep(seconds):
+    clock["now"] += seconds
+    clock["sleeps"] += 1
+    if clock["sleeps"] == clock["review_after"]:
+        state["reviews"] = REVIEWED
+    if clock["sleeps"] in (clock["review_after"], clock["finish_after"]):
+        state["runs"] = [{"id": 100, "status": "completed"}, {"id": 200, "status": "in_progress"}]
+    if clock["sleeps"] == clock["error_on"]:
+        state["runs_error"] = True
+
+
+def gate_while(runs, **events):
+    state["reviews"], state["runs"] = [], runs
+    clock.update({"now": 0.0, "sleeps": 0, "review_after": None, "finish_after": None, "error_on": None, **events})
+    return exit_code(lr.gate)
+
+
+lr.time = types.SimpleNamespace(monotonic=lambda: clock["now"], sleep=fake_sleep)
+os.environ["GITHUB_RUN_ID"] = "200"
+running = [{"id": 100, "status": "in_progress"}, {"id": 200, "status": "in_progress"}]
+check("gate waits for the head's review run in progress, then passes on its review",
+      gate_while(running, review_after=2) == 0 and clock["sleeps"] == 2)
+check("gate fails at once when only its own run is in progress",
+      gate_while([{"id": 200, "status": "in_progress"}]) == 1 and clock["sleeps"] == 0)
+check("gate fails when the review run ends without a review",
+      gate_while([{"id": 100, "status": "completed"}]) == 1 and clock["sleeps"] == 0)
+check("gate stops waiting when the review run ends mid-wait without a review",
+      gate_while(running, finish_after=2) == 1 and clock["sleeps"] == 2)
+check("a failed lookup mid-wait does not end the wait",
+      gate_while(running, error_on=1, review_after=3) == 0 and clock["sleeps"] == 3)
+check("gate stops waiting at the deadline",
+      gate_while(running) == 1 and clock["sleeps"] == lr.REVIEW_WAIT_SECONDS // lr.REVIEW_POLL_SECONDS)
+del os.environ["GITHUB_RUN_ID"]
+state["reviews"] = REVIEWED
 
 with tempfile.TemporaryDirectory() as out:
     lr.OUT = out
