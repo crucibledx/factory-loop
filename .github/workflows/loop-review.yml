@@ -79,7 +79,7 @@ jobs:
         run: |
           curl -fsSL https://app.factory.ai/cli | sh
           export PATH="$HOME/.local/bin:$PATH"
-          droid exec --auto low -m "${{ inputs.review_model }}" -r "$EFFORT" -f "$LOOP_REVIEW_DIR/prompt.md"
+          droid exec --auto medium -m "${{ inputs.review_model }}" -r "$EFFORT" -f "$LOOP_REVIEW_DIR/prompt.md"
           python3 .factory-loop/review/loop_review.py post
       - name: Gate
         run: python3 .factory-loop/review/loop_review.py gate
