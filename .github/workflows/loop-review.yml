@@ -64,11 +64,13 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
+          persist-credentials: false
       - uses: actions/checkout@v4
         with:
           repository: crucibledx/factory-loop
           ref: ${{ inputs.loop_ref }}
           path: .factory-loop
+          persist-credentials: false
       - id: collect
         run: echo "mode=$(python3 .factory-loop/review/loop_review.py collect)" >> "$GITHUB_OUTPUT"
       - name: Review
@@ -76,10 +78,14 @@ jobs:
         env:
           FACTORY_API_KEY: ${{ secrets.FACTORY_API_KEY }}
           EFFORT: ${{ inputs.reasoning_effort || (inputs.review_depth == 'shallow' && 'low' || 'medium') }}
+          # The exec reads only .loop-review files; loop_review.py holds the token.
+          GH_TOKEN: ''
         run: |
           curl -fsSL https://app.factory.ai/cli | sh
           export PATH="$HOME/.local/bin:$PATH"
           droid exec --auto medium -m "${{ inputs.review_model }}" -r "$EFFORT" -f "$LOOP_REVIEW_DIR/prompt.md"
-          python3 .factory-loop/review/loop_review.py post
+      - name: Post review
+        if: steps.collect.outputs.mode != 'gate'
+        run: python3 .factory-loop/review/loop_review.py post
       - name: Gate
         run: python3 .factory-loop/review/loop_review.py gate
