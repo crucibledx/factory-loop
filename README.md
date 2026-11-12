@@ -4,10 +4,28 @@ The Crucible delivery loop for [Factory Droid](https://factory.ai): an idea beco
 spec becomes a tested implementation PR. Shared by every `crucibledx` repo, so each repo only keeps what is specific to
 it.
 
-```
-idea (Slack / hq issue) → discovery brief → spec PR ──merge──▶ loop:implement issue → Workstream implementer → PR (green, no open P0/P1)
-                                  ▲ 2 reviewer droids                                    ▲ local verifier + code-reviewer, then PR review loop
-```
+## How the loop works
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://github.com/crucibledx/assets/raw/main/factory-loop/diagrams/dark/delivery-loop.svg">
+  <img alt="Crucible delivery loop: board stages, who acts at each stage, and how the loop fixes itself" src="https://github.com/crucibledx/assets/raw/main/factory-loop/diagrams/light/delivery-loop.svg">
+</picture>
+
+1. A request arrives in Slack. An idea goes through discovery and a spec PR checked by two reviewer droids; merging
+   the spec creates one `loop:implement` issue per target repo. Code work goes straight to the orchestrator.
+2. The Workstream orchestrator starts one agent per issue, each in its own worktree and branch.
+3. The agent implements, runs the repo's checks and the local `verifier` and `code-reviewer` droids, and opens a
+   draft PR. It marks the PR ready once they pass.
+4. `loop-review` reviews the PR. The `review / review` check stays red while a P0 or P1 finding is open.
+5. The agent fixes the findings, replies on each thread, and pushes. The next review covers the new commits and
+   resolves what is fixed.
+6. With CI and the review gate green, Nazar reviews and approves. His approval turns on auto-merge, and GitHub merges.
+7. When an agent hits a problem in the loop itself, it reports it to the orchestrator. The fix ships as a PR to this
+   repo through the same gate, and moving the `v0` tag rolls workflow fixes out to every repo.
+
+The diagram source is
+[`factory-loop/diagrams/delivery-loop.drawio`](https://github.com/crucibledx/assets/blob/main/factory-loop/diagrams/delivery-loop.drawio)
+in `crucibledx/assets`.
 
 ## What's inside
 
