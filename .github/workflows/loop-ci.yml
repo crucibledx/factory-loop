@@ -1,0 +1,113 @@
+name: Loop / CI
+
+# Org CI for Bun repos: quality (format, lint, typecheck), tests, build.
+# Scripts listed in an input run only when package.json defines them, so one caller fits every repo.
+# Repos without package.json (docs-only) pass with a notice.
+
+on:
+  workflow_call:
+    inputs:
+      bun_version:
+        type: string
+        default: latest
+      quality_scripts:
+        description: Space-separated package.json scripts for the quality job.
+        type: string
+        default: format:check lint typecheck
+      test_command:
+        description: Test command. Empty to skip.
+        type: string
+        default: bun test
+      junit_paths:
+        description: JUnit XML glob written by test_command, published as a check. Empty to skip.
+        type: string
+        default: ""
+      build_command:
+        description: Build command. Empty to skip the build job.
+        type: string
+        default: ""
+      build_verify:
+        description: Command run after the build, e.g. "./dist/forge --version".
+        type: string
+        default: ""
+      lfs:
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  checks: write
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: ${{ inputs.lfs }}
+      - id: pkg
+        run: |
+          if [ -f package.json ]; then echo "present=true" >> "$GITHUB_OUTPUT"; else
+            echo "present=false" >> "$GITHUB_OUTPUT"; echo "::notice::No package.json, nothing to check."; fi
+      - if: steps.pkg.outputs.present == 'true'
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ inputs.bun_version }}
+      - if: steps.pkg.outputs.present == 'true'
+        run: bun install
+      - if: steps.pkg.outputs.present == 'true'
+        env:
+          SCRIPTS: ${{ inputs.quality_scripts }}
+        run: |
+          for script in $SCRIPTS; do
+            if bun -e "process.exit(require('./package.json').scripts?.['$script'] ? 0 : 1)"; then
+              echo "::group::bun run $script"; bun run "$script"; echo "::endgroup::"
+            else
+              echo "::notice::Script $script not defined, skipped."
+            fi
+          done
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: ${{ inputs.lfs }}
+      - id: pkg
+        env:
+          TEST_COMMAND: ${{ inputs.test_command }}
+        run: echo "present=$([ -f package.json ] && [ -n "$TEST_COMMAND" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+      - if: steps.pkg.outputs.present == 'true'
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ inputs.bun_version }}
+      - if: steps.pkg.outputs.present == 'true'
+        run: bun install
+      - if: steps.pkg.outputs.present == 'true'
+        env:
+          TEST_COMMAND: ${{ inputs.test_command }}
+        run: sh -c "$TEST_COMMAND"
+      - if: always() && steps.pkg.outputs.present == 'true' && inputs.junit_paths != ''
+        uses: mikepenz/action-junit-report@v5
+        with:
+          report_paths: ${{ inputs.junit_paths }}
+          include_passed: true
+
+  build:
+    if: inputs.build_command != ''
+    needs: [quality, test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: ${{ inputs.lfs }}
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ inputs.bun_version }}
+      - run: bun install
+      - env:
+          BUILD_COMMAND: ${{ inputs.build_command }}
+          BUILD_VERIFY: ${{ inputs.build_verify }}
+        run: |
+          sh -c "$BUILD_COMMAND"
+          if [ -n "$BUILD_VERIFY" ]; then sh -c "$BUILD_VERIFY"; fi

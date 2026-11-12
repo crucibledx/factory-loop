@@ -1,0 +1,24 @@
+# Org CI. Logic lives in crucibledx/factory-loop (loop-ci.yml); set inputs for repo-specific commands.
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  checks: write
+
+jobs:
+  ci:
+    uses: crucibledx/factory-loop/.github/workflows/loop-ci.yml@v0
+    # with:
+    #   test_command: bun test
+    #   build_command: bun run build
+    #   build_verify: ./dist/<binary> --version
