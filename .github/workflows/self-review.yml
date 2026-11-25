@@ -1,0 +1,30 @@
+# factory-loop reviews its own PRs with the review workflow from the PR branch, so changes are tested before release.
+name: Self review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  pull_request_review:
+    types: [submitted]
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: read
+
+jobs:
+  review:
+    uses: ./.github/workflows/loop-review.yml
+    with:
+      loop_ref: ${{ github.event.pull_request.head.sha }}
+    secrets: inherit
+
+  # The script runs with the app token, so it comes from main, never from the PR under review.
+  automerge:
+    if: >-
+      github.event_name == 'pull_request_review' ||
+      (github.event_name == 'pull_request' && github.event.action == 'synchronize')
+    uses: ./.github/workflows/loop-automerge.yml
+    with:
+      loop_ref: main
+    secrets: inherit

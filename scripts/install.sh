@@ -10,6 +10,7 @@ copy() {
   mkdir -p "$(dirname "$dst")"; cp "$src" "$dst"; echo "added  $1"
 }
 copy .github/workflows/crucible-loop.yml
+copy .github/CODEOWNERS
 copy .factory/settings.json
 copy .factory/loop-contract.md
 if [ ! -d "$repo/specs" ]; then
