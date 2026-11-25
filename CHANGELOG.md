@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- `engineering-standards` has a Go section: layout, errors, package state, tests, and `golangci-lint`, each with a
+  review severity.
+
 ## v0.4.0 — 2026-11-10
 
 - New `loop-automerge` workflow: auto-merge is on exactly while an allowed approver (default `NazarUsik`) has
