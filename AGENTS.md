@@ -24,5 +24,6 @@ Org context: `crucibledx/hq` `AGENTS.md`.
 - Review helper: `python3 scripts/test-review.py`.
 - Guard hook: `sh scripts/test-guard.sh`.
 - Auto-merge script: `sh scripts/test-automerge.sh`.
+- Slack usage helper: `python3 scripts/test-slack-usage.py`.
 
 Commits: `feat: ...`, `fix: ...`, `docs: ...`. Tag releases `v0.x.y` and move the `v0` tag.
