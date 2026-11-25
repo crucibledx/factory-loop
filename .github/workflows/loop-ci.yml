@@ -62,6 +62,7 @@ jobs:
         env:
           SCRIPTS: ${{ inputs.quality_scripts }}
         run: |
+          set -f # script names are data, not glob patterns
           for script in $SCRIPTS; do
             if SCRIPT="$script" bun -e "process.exit(require('./package.json').scripts?.[process.env.SCRIPT] ? 0 : 1)"; then
               echo "::group::bun run $script"; bun run "$script"; echo "::endgroup::"
