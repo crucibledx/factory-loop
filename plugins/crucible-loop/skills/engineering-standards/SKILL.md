@@ -27,10 +27,11 @@ rule; say so there explicitly. Severity hints in brackets tell the reviewer how 
 
 - Make the change in the place that owns the behavior; extend through the existing extension points (registries,
   `how-to-add-*` guides) instead of special cases in callers. [P2]
-- Adding a variant (assistant, source, command, transform, harness) means a new folder (or Go file) plus one
-  registration, with zero edits to existing handlers. [P2]
-- Validate input at the boundary (config files, CLI args, network, file contents) with a schema (`zod` in TS repos);
-  inside the core, trust the types. [P1 when unvalidated external input reaches the core]
+- Adding a variant (assistant, source, command, transform) means a new folder (or a Go file) plus one registration,
+  with zero edits to existing handlers. [P2]
+- Validate input at the boundary (config files, CLI args, network, file contents) with a schema (`zod` in TS repos;
+  in Go, decode into typed structs and validate them in one function); inside the core, trust the types. [P1 when
+  unvalidated external input reaches the core]
 - Errors: fail with a message that tells the user what to do. Never swallow an error silently; never print a stack
   trace for an expected failure. [P1 for swallowed errors on user paths]
 - Cross-platform: macOS, Linux, and Windows are supported. Use path utilities, not string concatenation with `/`;
@@ -67,7 +68,8 @@ layer. [nit]
 
 ## 5. Go repos
 
-Sections 3 and 4 are for TypeScript; Go repos follow this section instead. All other sections apply to both.
+Go repos follow this section instead of section 3 and the TypeScript-specific rules in section 4. The naming and
+comment rules in section 4 and all other sections apply to both.
 
 Layout:
 
@@ -77,43 +79,46 @@ Layout:
   import. [P2]
 - One package per concern. Pure logic sits in packages without I/O; a consumer declares the small interface it needs
   from an I/O package. [P2]
-- Name a package for what it provides (`config`, `harness`); no `util`, `common`, or `helpers`. [nit]
+- Name a package for what it provides (`config`, `store`); no `util`, `common`, or `helpers`. [nit]
 
 Errors:
 
-- Wrap with context and `%w`: `fmt.Errorf("read config %s: %w", path, err)`. Don't return another package's error
-  bare. [P2]
-- Check errors with `errors.Is` / `errors.As`, never by comparing `err.Error()` text. [P2]
+- Wrap with context and `%w`: `fmt.Errorf("load config: %w", err)`. Don't return another package's error bare,
+  unless an interface contract requires the bare value (`io.EOF` from `Read`). [P2]
+- Check errors with `errors.Is` / `errors.As`, never with `==` or by comparing `err.Error()` text. [P2]
 - Sentinel errors (`var ErrNotFound = errors.New(...)`) only where a caller branches on them; otherwise return a
   wrapped error. [P2]
 - No `panic` outside `main` and init-time registration (for example a duplicate adapter name). Everything else
-  returns an error. [P1]
+  returns an error. `Must*` helpers on constant input at package level (`regexp.MustCompile`) are fine. [P1]
 
 State:
 
 - No package-level mutable variables: no global clients, config, caches, or counters. Pass dependencies as arguments
-  or struct fields. Allowed: constants, sentinel errors, values never reassigned, and an adapter registry (such as
-  harness adapters) filled only by registrations in `init()` and read-only after that. [P2]
+  or struct fields. Allowed: constants, sentinel errors, values never reassigned or mutated after package init
+  (lookup tables, compiled regexps), and an adapter registry (such as harness adapters) filled only by registrations
+  in `init()` and read-only after that. [P2]
 - `init()` only registers. No I/O, no env or flag reads, no goroutines. [P2]
 
 Tests:
 
 - Table-driven tests with `t.Run` subtests when cases share a shape. [nit]
 - Fixtures live in `testdata/` next to the package that reads them; files a test writes go in `t.TempDir()`. [nit]
-- CI runs `go test -race ./...`. [P2]
+- CI runs `go test -race ./...` (the race detector needs cgo enabled for that step). [P2]
 
 Lint and format:
 
-- CI runs `golangci-lint` with a checked-in `.golangci.yml` (`version: "2"`) that enables the `gofmt` and
-  `goimports` formatters, so code is `gofmt`/`goimports` clean. Reviewers never comment on what it enforces. [P2]
+- CI runs `golangci-lint` with a checked-in config (`version: "2"`) that enables the `gofmt` and `goimports`
+  formatters, so code is `gofmt`/`goimports` clean. [P2]
+- Reviewers never comment on what golangci-lint enforces.
 - A `//nolint` names the linter and the reason: `//nolint:errcheck // best-effort cleanup`. [nit]
+
 ## 6. Tests
 
 - Every behavior change has a test that fails without the change. [P1 when an acceptance-contract row has no test]
 - A test must test what its name says. Tests that only assert a mock was called, or that pass with the code deleted,
   don't count. [P1]
-- Unit tests sit next to the code (`*.test.ts`, `*_test.go`) and mock only at the infrastructure boundary, never whole files of
-  domain logic. [P2]
+- Unit tests sit next to the code (`*.test.ts`, `*_test.go`) and mock only at the I/O boundary (`infrastructure/` in
+  TS, I/O packages in Go), never whole files of domain logic. [P2]
 - End-to-end tests use temp directories and run the real CLI or app. No network in unit tests. [P2]
 - No snapshot tests of large generated output unless the output is the product. [nit]
 
