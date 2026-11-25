@@ -60,6 +60,9 @@ Post to Slack `#crucible-loop` in this format (Slack mrkdwn, links as `<url|repo
 *Blocked*
 • <link>: <what is stuck>. <the decision or fix needed>
 
+*Usage per requester*
+• <@U…>: <n> runs · <n> agents · <n> PRs
+
 *Next*
 • <what the loop works on tomorrow>
 
@@ -67,6 +70,10 @@ _Still waiting, unchanged: <counts with short labels>. <board link>_
 ```
 
 - One item per line, at most ~15 words. Leave out empty sections.
+- Usage per requester comes from the Slack ledger, not from GitHub: run
+  `python3 ~/crucible-agents/factory-loop/scripts/slack_usage.py` and paste its lines (one per requester, from the
+  day's `route`, `agent` and `pr` events). A missing or empty ledger prints nothing; leave the section out.
+  If the script fails, the ledger is an unavailable source: end with `_Couldn't read: Slack ledger_`.
 - Every "Needs you" line starts with the action Nazar must take, in bold; decisions list the options.
 - Items already reported and unchanged for more than 3 days go only into the "Still waiting" footer, as counts.
 - Plain words, no loop jargon (attestation, mission, readiness evidence, adjudication, WIP slots).
