@@ -88,6 +88,8 @@ check("a non-Slack user id is malformed", su.malformed_reason(
     entry(NOON, "route", user="not a user")) is not None)
 check("a trailing newline does not sneak past validation", su.malformed_reason(
     entry(NOON, "route", user="U1\n")) is not None)
+check("an entry without a parseable timestamp is malformed", su.malformed_reason(
+    entry("not-a-date", "route")) is not None and su.malformed_reason(entry(None, "route")) is not None)
 check("unknown events are not malformed", su.malformed_reason(entry(NOON, "claim")) is None)
 check("a valid route entry is not malformed", su.malformed_reason(entry(NOON, "route")) is None)
 
@@ -96,11 +98,13 @@ with tempfile.TemporaryDirectory() as tmp:
     path = write_ledger(tmp, entries)
     check("load_entries reads a real ledger", len(su.load_entries(path)) == 6)
     with open(path, "a") as fh:
-        fh.write("\nnot json\n[1,2]\n" + json.dumps(entry(NOON, "agent", agent=["s1"])) + "\n")
+        fh.write("\nnot json\n[1,2]\n" + json.dumps(entry(NOON, "agent", agent=["s1"]))
+                 + "\n" + json.dumps(entry("yesterday", "route")) + "\n")
     got = su.load_entries(path, warn=warnings.append)
     check("blank and malformed lines are skipped", len(got) == 6)
     check("warnings name the path and line", any("ledger.jsonl:8" in w for w in warnings)
           and any("ledger.jsonl:10" in w for w in warnings))
+    check("a bad timestamp warns with the path and line", any("ledger.jsonl:11" in w for w in warnings))
     check("a missing ledger reads as empty", su.load_entries(os.path.join(tmp, "nope")) == [])
 
     utf8 = os.path.join(tmp, "utf8.jsonl")

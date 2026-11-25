@@ -34,6 +34,8 @@ def malformed_reason(entry):
         return f"bad Slack user id {user!r}"
     if event in ("agent", "pr") and not (isinstance(entry.get(event), str) and entry.get(event)):
         return f"{event} event with no {event}"
+    if entry_day(entry) is None:
+        return f"bad timestamp {entry.get('at')!r}"
     return None
 
 
