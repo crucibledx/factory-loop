@@ -8,6 +8,7 @@ on:
   workflow_call:
     inputs:
       bun_version:
+        description: Bun version for oven-sh/setup-bun.
         type: string
         default: latest
       quality_scripts:
@@ -31,16 +32,17 @@ on:
         type: string
         default: ""
       lfs:
+        description: Check out Git LFS files.
         type: boolean
         default: false
 
 permissions:
   contents: read
-  checks: write
 
 jobs:
   quality:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
@@ -54,13 +56,13 @@ jobs:
         with:
           bun-version: ${{ inputs.bun_version }}
       - if: steps.pkg.outputs.present == 'true'
-        run: bun install
+        run: bun install --frozen-lockfile
       - if: steps.pkg.outputs.present == 'true'
         env:
           SCRIPTS: ${{ inputs.quality_scripts }}
         run: |
           for script in $SCRIPTS; do
-            if bun -e "process.exit(require('./package.json').scripts?.['$script'] ? 0 : 1)"; then
+            if SCRIPT="$script" bun -e "process.exit(require('./package.json').scripts?.[process.env.SCRIPT] ? 0 : 1)"; then
               echo "::group::bun run $script"; bun run "$script"; echo "::endgroup::"
             else
               echo "::notice::Script $script not defined, skipped."
@@ -69,6 +71,10 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      checks: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -76,18 +82,24 @@ jobs:
       - id: pkg
         env:
           TEST_COMMAND: ${{ inputs.test_command }}
-        run: echo "present=$([ -f package.json ] && [ -n "$TEST_COMMAND" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+        run: |
+          if [ ! -f package.json ]; then echo "::notice::No package.json, no tests to run."; echo "present=false" >> "$GITHUB_OUTPUT"
+          elif [ -z "$TEST_COMMAND" ]; then echo "::notice::test_command is empty, tests skipped."; echo "present=false" >> "$GITHUB_OUTPUT"
+          else echo "present=true" >> "$GITHUB_OUTPUT"; fi
       - if: steps.pkg.outputs.present == 'true'
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ inputs.bun_version }}
       - if: steps.pkg.outputs.present == 'true'
-        run: bun install
+        run: bun install --frozen-lockfile
       - if: steps.pkg.outputs.present == 'true'
         env:
           TEST_COMMAND: ${{ inputs.test_command }}
         run: sh -c "$TEST_COMMAND"
-      - if: always() && steps.pkg.outputs.present == 'true' && inputs.junit_paths != ''
+      # Fork PRs get a read-only token, so the report could not create its check run; the test step still gates.
+      - if: >-
+          always() && steps.pkg.outputs.present == 'true' && inputs.junit_paths != '' &&
+          (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         uses: mikepenz/action-junit-report@v5
         with:
           report_paths: ${{ inputs.junit_paths }}
@@ -97,6 +109,7 @@ jobs:
     if: inputs.build_command != ''
     needs: [quality, test]
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
@@ -104,7 +117,7 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ inputs.bun_version }}
-      - run: bun install
+      - run: bun install --frozen-lockfile
       - env:
           BUILD_COMMAND: ${{ inputs.build_command }}
           BUILD_VERIFY: ${{ inputs.build_verify }}

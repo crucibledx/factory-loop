@@ -1,4 +1,5 @@
 # Org CI. Logic lives in crucibledx/factory-loop (loop-ci.yml); set inputs for repo-specific commands.
+# Required checks for the main ruleset: `ci / quality`, `ci / test`, and `ci / build` when build_command is set.
 name: CI
 
 on:
@@ -9,7 +10,7 @@ on:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
