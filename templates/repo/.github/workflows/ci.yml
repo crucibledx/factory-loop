@@ -1,5 +1,6 @@
 # Org CI. Logic lives in crucibledx/factory-loop (loop-ci.yml); set inputs for repo-specific commands.
 # Required checks for the main ruleset: `ci / quality`, `ci / test`, and `ci / build` when build_command is set.
+# The test job needs `checks: write` (JUnit report), so keep it in the permissions below.
 name: CI
 
 on:

@@ -8,9 +8,9 @@ on:
   workflow_call:
     inputs:
       bun_version:
-        description: Bun version for oven-sh/setup-bun.
+        description: Bun version. Empty uses .bun-version, then package.json (packageManager, engines.bun), then latest.
         type: string
-        default: latest
+        default: ""
       quality_scripts:
         description: Space-separated package.json scripts for the quality job.
         type: string
@@ -18,7 +18,7 @@ on:
       test_command:
         description: Test command. Empty to skip.
         type: string
-        default: bun test
+        default: bun test --pass-with-no-tests
       junit_paths:
         description: JUnit XML glob written by test_command, published as a check. Empty to skip.
         type: string
@@ -55,6 +55,7 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ inputs.bun_version }}
+          bun-version-file: ${{ inputs.bun_version == '' && hashFiles('.bun-version') != '' && '.bun-version' || '' }}
       - if: steps.pkg.outputs.present == 'true'
         run: bun install --frozen-lockfile
       - if: steps.pkg.outputs.present == 'true'
@@ -90,6 +91,7 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ inputs.bun_version }}
+          bun-version-file: ${{ inputs.bun_version == '' && hashFiles('.bun-version') != '' && '.bun-version' || '' }}
       - if: steps.pkg.outputs.present == 'true'
         run: bun install --frozen-lockfile
       - if: steps.pkg.outputs.present == 'true'
@@ -98,7 +100,7 @@ jobs:
         run: sh -c "$TEST_COMMAND"
       # Fork PRs get a read-only token, so the report could not create its check run; the test step still gates.
       - if: >-
-          always() && steps.pkg.outputs.present == 'true' && inputs.junit_paths != '' &&
+          !cancelled() && steps.pkg.outputs.present == 'true' && inputs.junit_paths != '' &&
           (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         uses: mikepenz/action-junit-report@v5
         with:
@@ -117,6 +119,7 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ inputs.bun_version }}
+          bun-version-file: ${{ inputs.bun_version == '' && hashFiles('.bun-version') != '' && '.bun-version' || '' }}
       - run: bun install --frozen-lockfile
       - env:
           BUILD_COMMAND: ${{ inputs.build_command }}
