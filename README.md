@@ -35,8 +35,8 @@ in `crucibledx/assets`.
 | `plugins/crucible-loop/skills/`       | `idea-discovery`, `spec-writer`, `acceptance-contract`, `implement-spec`, `loop-orchestrator`, `engineering-standards` |
 | `plugins/crucible-loop/droids/`       | `researcher`, `spec-reviewer-arch`, `spec-reviewer-product`, `code-reviewer`, `verifier` |
 | `plugins/crucible-loop/hooks/`        | Guard: blocks pushes to `main`, force pushes, and PR merges             |
-| `.github/workflows/loop-*.yml`        | Reusable workflows: review + merge gate, auto-merge on approval, `@droid` mentions, spec merged (`loop-implement` is deprecated) |
-| `templates/repo/`                     | The thin per-repo files: caller workflow, `.factory/settings.json`, `.factory/loop-contract.md` |
+| `.github/workflows/loop-*.yml`        | Reusable workflows: review + merge gate, auto-merge on approval, `@droid` mentions, spec merged, org CI for Bun repos (`loop-ci`; `loop-implement` is deprecated) |
+| `templates/repo/`                     | The thin per-repo files: caller workflows (`crucible-loop.yml`, `ci.yml`), `.factory/settings.json`, `.factory/loop-contract.md` |
 
 ## Add the loop to a repo
 
@@ -46,6 +46,11 @@ scripts/install.sh ~/crucible/projects/<repo>
 
 Then edit `.factory/loop-contract.md` with the repo's real check commands. (A `## Loop contract` section in
 `AGENTS.md` also works.)
+
+`.github/workflows/ci.yml` calls `loop-ci`: format, lint, and typecheck scripts that `package.json` defines, `bun test`,
+and an optional build. Set its `with:` inputs for repo-specific commands, and add `ci / quality`, `ci / test` (and
+`ci / build` when `build_command` is set) as required checks on the `main` ruleset. `install.sh` keeps an existing
+`ci.yml`; replace it by hand.
 
 Secrets, set once:
 

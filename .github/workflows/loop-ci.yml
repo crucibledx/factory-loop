@@ -1,0 +1,132 @@
+name: Loop / CI
+
+# Org CI for Bun repos: quality (format, lint, typecheck), tests, build.
+# Scripts listed in an input run only when package.json defines them, so one caller fits every repo.
+# Repos without package.json (docs-only) pass with a notice.
+
+on:
+  workflow_call:
+    inputs:
+      bun_version:
+        description: Bun version. Empty uses .bun-version, then package.json (packageManager, engines.bun), then latest.
+        type: string
+        default: ""
+      quality_scripts:
+        description: Space-separated package.json scripts for the quality job.
+        type: string
+        default: format:check lint typecheck
+      test_command:
+        description: Test command. Empty to skip.
+        type: string
+        default: bun test --pass-with-no-tests
+      junit_paths:
+        description: JUnit XML glob written by test_command, published as a check. Empty to skip.
+        type: string
+        default: ""
+      build_command:
+        description: Build command. Empty to skip the build job.
+        type: string
+        default: ""
+      build_verify:
+        description: Command run after the build, e.g. "./dist/forge --version".
+        type: string
+        default: ""
+      lfs:
+        description: Check out Git LFS files.
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: ${{ inputs.lfs }}
+      - id: pkg
+        run: |
+          if [ -f package.json ]; then echo "present=true" >> "$GITHUB_OUTPUT"; else
+            echo "present=false" >> "$GITHUB_OUTPUT"; echo "::notice::No package.json, nothing to check."; fi
+      - if: steps.pkg.outputs.present == 'true'
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ inputs.bun_version }}
+          bun-version-file: ${{ inputs.bun_version == '' && hashFiles('.bun-version') != '' && '.bun-version' || '' }}
+      - if: steps.pkg.outputs.present == 'true'
+        run: bun install --frozen-lockfile
+      - if: steps.pkg.outputs.present == 'true'
+        env:
+          SCRIPTS: ${{ inputs.quality_scripts }}
+        run: |
+          set -f # script names are data, not glob patterns
+          for script in $SCRIPTS; do
+            if SCRIPT="$script" bun -e "process.exit(require('./package.json').scripts?.[process.env.SCRIPT] ? 0 : 1)"; then
+              echo "::group::bun run $script"; bun run "$script"; echo "::endgroup::"
+            else
+              echo "::notice::Script $script not defined, skipped."
+            fi
+          done
+
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      checks: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: ${{ inputs.lfs }}
+      - id: pkg
+        env:
+          TEST_COMMAND: ${{ inputs.test_command }}
+        run: |
+          if [ ! -f package.json ]; then echo "::notice::No package.json, no tests to run."; echo "present=false" >> "$GITHUB_OUTPUT"
+          elif [ -z "$TEST_COMMAND" ]; then echo "::notice::test_command is empty, tests skipped."; echo "present=false" >> "$GITHUB_OUTPUT"
+          else echo "present=true" >> "$GITHUB_OUTPUT"; fi
+      - if: steps.pkg.outputs.present == 'true'
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ inputs.bun_version }}
+          bun-version-file: ${{ inputs.bun_version == '' && hashFiles('.bun-version') != '' && '.bun-version' || '' }}
+      - if: steps.pkg.outputs.present == 'true'
+        run: bun install --frozen-lockfile
+      - if: steps.pkg.outputs.present == 'true'
+        env:
+          TEST_COMMAND: ${{ inputs.test_command }}
+        run: bash -eo pipefail -c "$TEST_COMMAND"
+      # Fork PRs get a read-only token, so the report could not create its check run; the test step still gates.
+      - if: >-
+          !cancelled() && steps.pkg.outputs.present == 'true' && inputs.junit_paths != '' &&
+          (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        uses: mikepenz/action-junit-report@v5
+        with:
+          report_paths: ${{ inputs.junit_paths }}
+          include_passed: true
+
+  build:
+    if: inputs.build_command != ''
+    needs: [quality, test]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: ${{ inputs.lfs }}
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ inputs.bun_version }}
+          bun-version-file: ${{ inputs.bun_version == '' && hashFiles('.bun-version') != '' && '.bun-version' || '' }}
+      - run: |
+          if [ -f package.json ]; then bun install --frozen-lockfile; else
+            echo "::notice::No package.json, dependencies not installed."; fi
+      - env:
+          BUILD_COMMAND: ${{ inputs.build_command }}
+          BUILD_VERIFY: ${{ inputs.build_verify }}
+        run: |
+          bash -eo pipefail -c "$BUILD_COMMAND"
+          if [ -n "$BUILD_VERIFY" ]; then bash -eo pipefail -c "$BUILD_VERIFY"; fi
