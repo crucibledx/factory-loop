@@ -49,8 +49,8 @@ fi
 
 # Prints "pending<TAB>check" or "failed<TAB>check" for each required check of branch $1 that has not passed on
 # commit $2. Required checks come from the branch rules (rulesets) and classic branch protection. Only the latest run
-# of a check counts; success, neutral, and skipped pass, as on GitHub. A missing check is pending: it may not have
-# started yet.
+# of a check counts; success, neutral, and skipped pass, as on GitHub. A check reported both as a check run and as a
+# commit status must pass in both. A missing check is pending: it may not have started yet.
 required_checks_not_passed() {
   rules=$(gh api --paginate "repos/$REPO/rules/branches/$1?per_page=100" \
     --jq '.[] | select(.type == "required_status_checks") | .parameters.required_status_checks[]
@@ -76,7 +76,7 @@ required_checks_not_passed() {
         if (app[i] != "") v = ((c SUBSEP app[i]) in run) ? run[c, app[i]] : "pending"
         else {
           r = (c in anyrun) ? anyrun[c] : ""; s = (c in status) ? status[c] : ""
-          v = (r == "passed" || s == "passed") ? "passed" : (r == "failed" || s == "failed") ? "failed" : "pending"
+          v = (r == "failed" || s == "failed") ? "failed" : (r == "pending" || s == "pending" || r s == "") ? "pending" : "passed"
         }
         if (v != "passed") print v "\t" c
       }
@@ -84,9 +84,12 @@ required_checks_not_passed() {
 }
 
 if [ "$approved" = "true" ] && [ "$on" != "true" ]; then
-  pr_state=$(gh pr view "$PR" --repo "$REPO" --json mergeStateStatus,baseRefName --jq '"\(.mergeStateStatus) \(.baseRefName)"')
+  pr_state=$(gh pr view "$PR" --repo "$REPO" --json mergeStateStatus,baseRefName,id \
+    --jq '"\(.mergeStateStatus) \(.baseRefName) \(.id)"')
   merge_state=${pr_state%% *}
-  base=${pr_state#* }
+  rest=${pr_state#* }
+  base=${rest%% *}
+  pr_id=${rest#* }
   merge_now=false
   case "$merge_state" in
     CLEAN|UNSTABLE)
@@ -114,8 +117,12 @@ if [ "$approved" = "true" ] && [ "$on" != "true" ]; then
     gh pr merge "$PR" --repo "$REPO" "--$METHOD" --match-head-commit "$head"
     echo "Merged $REPO#$PR at $head ($METHOD): it was $merge_state and its required checks passed."
   else
-    # --match-head-commit: never merge a commit other than the approved head.
-    gh pr merge "$PR" --repo "$REPO" --auto "--$METHOD" --match-head-commit "$head"
+    # The mutation, not `gh pr merge --auto`: gh merges at once when it sees the PR as mergeable, which would skip the
+    # required-check reading above. expectedHeadOid: never merge a commit other than the approved head.
+    gh api graphql --silent \
+      -f query='mutation($id:ID!,$method:PullRequestMergeMethod!,$sha:GitObjectID!){
+        enablePullRequestAutoMerge(input:{pullRequestId:$id,mergeMethod:$method,expectedHeadOid:$sha}){clientMutationId}}' \
+      -f id="$pr_id" -f method="$(printf '%s' "$METHOD" | tr '[:lower:]' '[:upper:]')" -f sha="$head"
     echo "Auto-merge is on for $REPO#$PR at $head ($METHOD)."
   fi
 elif [ "$approved" != "true" ] && [ "$on" = "true" ]; then

@@ -9,18 +9,22 @@ mkdir "$tmp/bin"
 # STUB_PR: head, auto-merge on, eligible, then "login state commit" lines. STUB_MERGE_STATE: mergeStateStatus.
 # STUB_RULES / STUB_PROTECTION: required checks ("req" lines). STUB_RUNS / STUB_STATUSES: checks on commit abc only,
 # so a lookup of any other commit is an unexpected call. STUB_HEAD_NOW: the head re-read right before merging.
-# STUB_FAIL_ON: any call whose arguments contain this text fails.
+# STUB_FAIL_ON: any call whose arguments contain this text fails. The auto-merge mutation is logged as
+# "auto-merge id=... method=... sha=...".
 cat > "$tmp/bin/gh" <<'STUB'
 #!/bin/sh
 case "$*" in *"${STUB_FAIL_ON:-#none#}"*) echo "HTTP 500" >&2; exit 1 ;; esac
 case "$*" in
   "api repos/o/r --jq"*) [ -n "${STUB_API_FAIL:-}" ] && { echo "HTTP 503" >&2; exit 1; }; echo "$STUB_ALLOW" ;;
+  "api graphql --silent -f query=mutation"*)
+    out=auto-merge; for a; do case $a in id=*|method=*|sha=*) out="$out $a" ;; esac; done
+    echo "$out" >> "$STUB_CALLS"; exit "${STUB_MERGE_RC:-0}" ;;
   "api graphql"*) [ -n "${STUB_GQL_FAIL:-}" ] && { echo "HTTP 502" >&2; exit 1; }; printf '%b\n' "$STUB_PR" ;;
   "api --paginate repos/o/r/rules/branches/main?"*) printf '%b' "$STUB_RULES" ;;
   "api repos/o/r/branches/main --jq"*) printf '%b' "${STUB_PROTECTION:-}" ;;
   "api --paginate repos/o/r/commits/abc/check-runs?"*) printf '%b' "$STUB_RUNS" ;;
   "api --paginate repos/o/r/commits/abc/status?"*) printf '%b' "${STUB_STATUSES:-}" ;;
-  "pr view 7 --repo o/r --json mergeStateStatus,baseRefName "*) echo "${STUB_MERGE_STATE:-BLOCKED} main" ;;
+  "pr view 7 --repo o/r --json mergeStateStatus,baseRefName,id "*) echo "${STUB_MERGE_STATE:-BLOCKED} main PR_7" ;;
   "pr view 7 --repo o/r --json headRefOid "*) echo "${STUB_HEAD_NOW:-abc}" ;;
   "pr merge"*) echo "$*" >> "$STUB_CALLS"; exit "${STUB_MERGE_RC:-0}" ;;
   *) echo "unexpected gh $*" >&2; exit 99 ;;
@@ -48,12 +52,12 @@ check() {
   fi
 }
 
-on="pr merge 7 --repo o/r --auto --squash --match-head-commit abc"
+on="auto-merge id=PR_7 method=SQUASH sha=abc"
 off="pr merge 7 --repo o/r --disable-auto"
 now="pr merge 7 --repo o/r --squash --match-head-commit abc"
 check "approver approved head: turn on" 0 "$on"
 check "second approver in list counts" 0 "$on" STUB_PR='abc\nfalse\ntrue\nana APPROVED abc'
-check "merge_method is passed" 0 "pr merge 7 --repo o/r --auto --rebase --match-head-commit abc" METHOD=rebase
+check "merge_method is passed" 0 "auto-merge id=PR_7 method=REBASE sha=abc" METHOD=rebase
 check "already on and approved: no call" 0 "" STUB_PR='abc\ntrue\ntrue\nnazar APPROVED abc'
 check "approval on old commit, on: turn off" 0 "$off" STUB_PR='abc\ntrue\ntrue\nnazar APPROVED old'
 check "approval on old commit, off: no call" 0 "" STUB_PR='abc\nfalse\ntrue\nnazar APPROVED old'
@@ -92,6 +96,7 @@ check "latest run counts: newer failure" 1 "" STUB_MERGE_STATE=CLEAN \
 check "required check pending: auto-merge, no merge" 0 "$on" STUB_MERGE_STATE=UNSTABLE \
   STUB_RUNS='run\t5\t15368\tin_progress\t\treview / review\n'
 check "required check missing: auto-merge, no merge" 0 "$on" STUB_MERGE_STATE=CLEAN STUB_RUNS=''
+check "required check missing, auto-merge refused: fails" 1 "$on" STUB_MERGE_STATE=CLEAN STUB_RUNS='' STUB_MERGE_RC=1
 check "pending and failed required checks: fails" 1 "" STUB_MERGE_STATE=CLEAN STUB_RULES='req\ta\t\nreq\tb\t\n' \
   STUB_RUNS='run\t1\t9\tqueued\t\ta\nrun\t2\t9\tcompleted\ttimed_out\tb\n'
 check "required check failed: no merge" 1 "" STUB_MERGE_STATE=UNSTABLE \
@@ -104,6 +109,12 @@ check "required commit status success: merge" 0 "$now" STUB_MERGE_STATE=CLEAN \
   STUB_RULES='req\tlegacy\t\n' STUB_RUNS='' STUB_STATUSES='status\tsuccess\tlegacy\n'
 check "required commit status pending: auto-merge, no merge" 0 "$on" STUB_MERGE_STATE=CLEAN \
   STUB_RULES='req\tlegacy\t\n' STUB_RUNS='' STUB_STATUSES='status\tpending\tlegacy\n'
+check "check run passed but same-name status failed: fails" 1 "" STUB_MERGE_STATE=CLEAN \
+  STUB_RULES='req\tci\t\n' STUB_RUNS='run\t5\t9\tcompleted\tsuccess\tci\n' STUB_STATUSES='status\tfailure\tci\n'
+check "check run pending but same-name status passed: auto-merge" 0 "$on" STUB_MERGE_STATE=CLEAN \
+  STUB_RULES='req\tci\t\n' STUB_RUNS='run\t5\t9\tin_progress\t\tci\n' STUB_STATUSES='status\tsuccess\tci\n'
+check "check run and same-name status passed: merge" 0 "$now" STUB_MERGE_STATE=CLEAN \
+  STUB_RULES='req\tci\t\n' STUB_RUNS='run\t5\t9\tcompleted\tsuccess\tci\n' STUB_STATUSES='status\tsuccess\tci\n'
 check "required commit status error: fails" 1 "" STUB_MERGE_STATE=CLEAN \
   STUB_RULES='req\tlegacy\t\n' STUB_RUNS='' STUB_STATUSES='status\terror\tlegacy\n'
 check "branch protection checks are required too" 1 "" STUB_MERGE_STATE=CLEAN STUB_PROTECTION='req\tlint\t\n' \
