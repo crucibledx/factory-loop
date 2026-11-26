@@ -9,6 +9,10 @@
   the reviewer is told. This runs PR code in a job with `FACTORY_API_KEY` and a write token, so turn it on only where
   every PR author is trusted. Without it, the prompt now tells the reviewer not to run any repository code. Both checkouts move to `actions/checkout` v7.0.1 (Node 24), and every action in the job
   is pinned to a commit SHA.
+- When the Factory usage limit stops the reviewer (`droid exec` 402), `loop-review` reports a "Review usage limit"
+  error with the reset time instead of an unexplained failure. A new scheduled workflow in this repo,
+  `loop-review-retry`, re-runs those review jobs across the org as the `crucible-smith` app once the limit has
+  reset, so the PR gets its review without a manual re-run. The app needs Actions write on its installation.
 
 ## v0.5.1 — 2026-11-26
 

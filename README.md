@@ -98,6 +98,14 @@ dismissed on new pushes, resolved conversations, and the
 `SMITH_CLIENT_ID` variable and `SMITH_PRIVATE_KEY` secret. Without them the job skips with a notice. Private repos on the
 Free plan have no rulesets or auto-merge; merge those by hand.
 
+## Review at the usage limit
+
+The hosted review runs `droid exec` on the same Factory plan as the workstreams. When the plan's usage limit stops
+the reviewer, the `review / review` check stays red (the commit has no review), but the job reports it as a
+"Review usage limit" error with the reset time, not as a review failure. `loop-review-retry` runs in this repo every
+30 minutes as the `crucible-smith` app: it re-runs those review jobs in every repo the app is installed on, once the
+limit has reset, while the PR is open, not a draft, and still at the same commit. Re-run the job by hand to go sooner.
+
 ## Use the plugin locally
 
 ```sh

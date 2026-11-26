@@ -7,6 +7,8 @@ name: Loop / review
 # The job fails while reviewer threads with a blocking severity stay unresolved, or while the checked-out commit has
 # no completed review, so a ruleset can require it. A gate-only run waits for a review run of the same commit that is
 # still in progress, so it reports that review's verdict instead of a stale failure.
+# When the Factory usage limit stops the reviewer, the Review step says so (with the reset time) instead of looking like
+# a review failure, and loop-review-retry.yml re-runs the job after the reset.
 
 on:
   workflow_call:
@@ -137,7 +139,14 @@ jobs:
         run: |
           curl -fsSL https://app.factory.ai/cli | sh
           export PATH="$HOME/.local/bin:$PATH"
-          droid exec --auto medium -m "${{ inputs.review_model }}" -r "$EFFORT" -f "$LOOP_REVIEW_DIR/prompt.md"
+          log="$RUNNER_TEMP/droid-exec.log"
+          droid exec --auto medium -m "${{ inputs.review_model }}" -r "$EFFORT" -f "$LOOP_REVIEW_DIR/prompt.md" 2>&1 | tee "$log"
+          status=${PIPESTATUS[0]}
+          if [ "$status" -ne 0 ]; then
+            # A usage-limit stop is marked so it reads as one, and so loop-review-retry.yml re-runs it after the reset.
+            python3 .factory-loop/review/usage_limit.py note "$log"
+            exit "$status"
+          fi
       - name: Post review
         if: steps.collect.outputs.mode != 'gate'
         run: python3 .factory-loop/review/loop_review.py post

@@ -1,0 +1,42 @@
+# Re-runs review jobs that the Factory usage limit stopped, once the limit has reset.
+# loop-review.yml marks such a stop with a "Review usage limit" annotation carrying the reset time
+# (review/usage_limit.py note). Nothing else re-runs that job, so without this sweep the PR's review check stays red
+# until someone re-runs it by hand. Every 30 minutes, this job looks at failed pull_request runs from the last
+# 3 days in every repo the crucible-smith app is installed on, and re-runs the failed jobs of a run whose review job
+# carries the annotation, once its reset time has passed, while the PR is open, not a draft, and still at that head.
+# It runs as the app because the Actions token of this repo cannot re-run jobs in other repos.
+name: Loop / review retry
+
+on:
+  schedule:
+    - cron: "7,37 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  retry:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: loop-review-retry
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Get crucible-smith token
+        id: smith
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0, pinned: handles the app's private key
+        with:
+          client-id: ${{ vars.SMITH_CLIENT_ID }}
+          private-key: ${{ secrets.SMITH_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          permission-actions: write
+          permission-checks: read
+          permission-pull-requests: read
+      - name: Re-run reviews stopped by the usage limit
+        env:
+          GH_TOKEN: ${{ steps.smith.outputs.token }}
+        run: python3 review/usage_limit.py retry

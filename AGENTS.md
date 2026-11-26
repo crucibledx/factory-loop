@@ -24,6 +24,7 @@ Org context: `crucibledx/hq` `AGENTS.md`.
 - JSON parses: `python3 -m json.tool` on `.factory-plugin/*.json` and `plugins/*/.factory-plugin/*.json`, `hooks.json`.
 - Workflows lint: `actionlint .github/workflows/*.yml templates/repo/.github/workflows/*.yml`.
 - Review helper: `python3 scripts/test-review.py`.
+- Review usage-limit retry: `python3 scripts/test-usage-limit.py`.
 - Guard hook: `sh scripts/test-guard.sh`.
 - Auto-merge script: `sh scripts/test-automerge.sh`.
 - Slack usage helper: `python3 scripts/test-slack-usage.py`.
