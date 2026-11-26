@@ -33,11 +33,12 @@ it.
   <img alt="Multiplayer Slack: messages from every Slack user go through the Slack bridge to the Root, Forge, Ember and Other workstreams, traced by Ember" src="https://github.com/crucibledx/assets/raw/main/factory-loop/diagrams/light/multiplayer-slack.svg">
 </picture>
 
-Anyone in the Slack channel can make a request. The Slack bridge (a Cloudflare Worker) checks and acknowledges each
-message and pushes it to a workstream: by channel, by the workstream that claimed the thread, or by a `forge:`,
-`ember:` or `other:` prefix or an @mention; anything else goes to Root. The workstream replies in the requester's
-thread. Ember joins every session into one tree (Root, workstream, agent) and attributes it to the active Slack user,
-and `slack-ledger.jsonl` records usage per requester.
+Anyone in the Slack channel can make a request. The Slack bridge (a Cloudflare Worker) checks each message, routes
+it, records it, and delivers it to a workstream's relay: by a `forge:`, `ember:` or `other:` prefix (also as
+`@Crucible ember:`), by the workstream that claimed the thread, or else by channel, which sends `#crucible-work` to
+Root. Only once the relay accepts the message does the bridge acknowledge it in the thread. The workstream replies in
+the requester's thread. Ember joins every session into one tree (Root, workstream, agent) and attributes it to the
+active Slack user, and `slack-ledger.jsonl` records usage per requester.
 
 The diagram sources are
 [`factory-loop/diagrams/delivery-loop.drawio`](https://github.com/crucibledx/assets/blob/main/factory-loop/diagrams/delivery-loop.drawio)
