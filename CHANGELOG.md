@@ -7,7 +7,7 @@
   `.bun-version`, else `package.json`) and the dependencies, without lifecycle scripts, when the repo has `bun.lock`;
   `actionlint` (checksum-verified) when the loop contract lists it. A failed install does not block the review, and
   the reviewer is told. This runs PR code in a job with `FACTORY_API_KEY` and a write token, so turn it on only where
-  every PR author is trusted. Both checkouts move to `actions/checkout` v7.0.1 (Node 24), and every action in the job
+  every PR author is trusted. Without it, the prompt now tells the reviewer not to run any repository code. Both checkouts move to `actions/checkout` v7.0.1 (Node 24), and every action in the job
   is pinned to a commit SHA.
 
 ## v0.5.1 — 2026-11-26

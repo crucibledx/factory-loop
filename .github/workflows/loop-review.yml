@@ -81,9 +81,11 @@ jobs:
           path: .factory-loop
           persist-credentials: false
       - id: collect
+        env:
+          LOOP_RUN_CHECKS: ${{ inputs.run_checks }}
         run: echo "mode=$(python3 .factory-loop/review/loop_review.py collect)" >> "$GITHUB_OUTPUT"
-      # run_checks: the repo's toolchain, so the reviewer can run the checks in its loop contract. A failed install
-      # never blocks the review; the reviewer is told and reports what it could not run.
+      # run_checks: the repo's toolchain, so the reviewer can run the checks in its loop contract (collect puts the
+      # permission in the prompt). A failed install never blocks the review; the reviewer is told.
       - name: Set up Bun
         id: bun
         if: inputs.run_checks && steps.collect.outputs.mode != 'gate' && hashFiles('bun.lock', 'bun.lockb') != ''
@@ -118,16 +120,13 @@ jobs:
           mkdir -p "$RUNNER_TEMP/bin"
           tar -xzf "$archive" -C "$RUNNER_TEMP/bin" actionlint
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
-      - name: Allow running checks
-        if: inputs.run_checks && steps.collect.outputs.mode != 'gate'
-        env:
-          INSTALL_FAILED: ${{ steps.bun.outcome == 'failure' || steps.deps.outcome == 'failure' || steps.actionlint.outcome == 'failure' }}
+      - name: Note a failed install
+        if: >-
+          inputs.run_checks && steps.collect.outputs.mode != 'gate' &&
+          (steps.bun.outcome == 'failure' || steps.deps.outcome == 'failure' || steps.actionlint.outcome == 'failure')
         run: |
-          cat .factory-loop/review/run-checks.md >> "$LOOP_REVIEW_DIR/prompt.md"
-          if [ "$INSTALL_FAILED" = true ]; then
-            printf '\nA toolchain install failed on this runner. Report checks it breaks as could not run, never as findings.\n' \
-              >> "$LOOP_REVIEW_DIR/prompt.md"
-          fi
+          printf '\nA toolchain install failed on this runner. Report checks it breaks as could not run, never as findings.\n' \
+            >> "$LOOP_REVIEW_DIR/prompt.md"
       - name: Review
         if: steps.collect.outputs.mode != 'gate'
         env:

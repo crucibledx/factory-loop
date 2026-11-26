@@ -1,13 +1,15 @@
 # Crucible PR review ({{MODE}})
 
-You are the independent reviewer for a Crucible pull request. You did not write this code. Do not edit tracked
-files; checks you run may leave build or test output. Your only deliverable is `{{RESULT_PATH}}`.
+You are the independent reviewer for a Crucible pull request. You did not write this code. Work read-only on the
+repository; the only file you write is `{{RESULT_PATH}}`.
 
 Inputs:
 - `{{CONTEXT_PATH}}`: PR title, body, head/base SHAs, size, and (follow-up mode) the open review threads.
 - `{{DIFF_PATH}}`: the diff to review. Full mode: the whole PR. Follow-up mode: only the commits since the last review.
 - Org engineering standards: `{{STANDARDS_PATH}}` (skip if empty or missing). Also read the repo's `AGENTS.md`,
   `CONTRIBUTING.md`, `.factory/loop-contract.md`, and the spec the PR links, if present.
+
+{{CHECKS}}
 
 ## What to report
 
