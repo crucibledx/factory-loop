@@ -34,6 +34,13 @@ on:
         description: Ref of crucibledx/factory-loop to load the review prompt and org standards from.
         type: string
         default: v0
+      run_checks:
+        description: >-
+          Install the repo's toolchain (Bun and dependencies when it has bun.lock, actionlint when its loop contract
+          lists it) and let the reviewer run the loop contract's checks. This runs PR code in a job that holds
+          FACTORY_API_KEY and a write token, so enable it only where every PR author is trusted.
+        type: boolean
+        default: false
     secrets:
       FACTORY_API_KEY:
         required: true
@@ -75,29 +82,33 @@ jobs:
           persist-credentials: false
       - id: collect
         run: echo "mode=$(python3 .factory-loop/review/loop_review.py collect)" >> "$GITHUB_OUTPUT"
-      # The repo's toolchain, so the reviewer can run the checks in its loop contract. A failed install never blocks
-      # the review; the reviewer reports what it could not run.
+      # run_checks: the repo's toolchain, so the reviewer can run the checks in its loop contract. A failed install
+      # never blocks the review; the reviewer is told and reports what it could not run.
       - name: Set up Bun
-        if: steps.collect.outputs.mode != 'gate' && hashFiles('bun.lock', 'bun.lockb') != ''
+        id: bun
+        if: inputs.run_checks && steps.collect.outputs.mode != 'gate' && hashFiles('bun.lock', 'bun.lockb') != ''
         continue-on-error: true
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: ${{ hashFiles('.bun-version') != '' && '.bun-version' || '' }}
       - name: Install dependencies
-        if: steps.collect.outputs.mode != 'gate' && hashFiles('bun.lock', 'bun.lockb') != ''
+        id: deps
+        if: inputs.run_checks && steps.collect.outputs.mode != 'gate' && hashFiles('bun.lock', 'bun.lockb') != ''
         continue-on-error: true
         env:
           GH_TOKEN: ''
         # Lifecycle scripts are PR code; skip them so installing runs nothing from the PR.
         run: bun install --frozen-lockfile --ignore-scripts
       - name: Install actionlint
-        if: steps.collect.outputs.mode != 'gate' && hashFiles('.factory/loop-contract.md') != ''
+        id: actionlint
+        if: inputs.run_checks && steps.collect.outputs.mode != 'gate'
         continue-on-error: true
         env:
           VERSION: 1.7.12
           SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
         run: |
-          if ! grep -q actionlint .factory/loop-contract.md; then
+          # The loop contract is .factory/loop-contract.md or a section of AGENTS.md.
+          if ! grep -sqF '`actionlint' .factory/loop-contract.md AGENTS.md; then
             echo "The loop contract does not list actionlint; not installed."; exit 0
           fi
           archive="$RUNNER_TEMP/actionlint.tar.gz"
@@ -107,6 +118,16 @@ jobs:
           mkdir -p "$RUNNER_TEMP/bin"
           tar -xzf "$archive" -C "$RUNNER_TEMP/bin" actionlint
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: Allow running checks
+        if: inputs.run_checks && steps.collect.outputs.mode != 'gate'
+        env:
+          INSTALL_FAILED: ${{ steps.bun.outcome == 'failure' || steps.deps.outcome == 'failure' || steps.actionlint.outcome == 'failure' }}
+        run: |
+          cat .factory-loop/review/run-checks.md >> "$LOOP_REVIEW_DIR/prompt.md"
+          if [ "$INSTALL_FAILED" = true ]; then
+            printf '\nA toolchain install failed on this runner. Report checks it breaks as could not run, never as findings.\n' \
+              >> "$LOOP_REVIEW_DIR/prompt.md"
+          fi
       - name: Review
         if: steps.collect.outputs.mode != 'gate'
         env:
