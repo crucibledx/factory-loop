@@ -170,6 +170,20 @@ def ensure_commit(sha):
             sys.exit(f"cannot fetch {sha}: {fetched.stderr.strip()}")
 
 
+def render_prompt(mode, run_checks):
+    """The reviewer's prompt. Only with run_checks may it run repository code; otherwise it is told not to."""
+    template_path = os.environ.get("LOOP_REVIEW_PROMPT", os.path.join(os.path.dirname(__file__), "prompt.md"))
+    with open(template_path, encoding="utf-8") as fh:
+        template = fh.read()
+    checks_path = os.path.join(os.path.dirname(template_path), "run-checks.md" if run_checks else "no-checks.md")
+    with open(checks_path, encoding="utf-8") as fh:
+        checks = fh.read().strip()
+    prompt = template.replace("{{MODE}}", mode).replace("{{CONTEXT_PATH}}", f"{OUT}/context.json")
+    prompt = prompt.replace("{{DIFF_PATH}}", f"{OUT}/diff.patch").replace("{{RESULT_PATH}}", f"{OUT}/result.json")
+    prompt = prompt.replace("{{STANDARDS_PATH}}", os.environ.get("LOOP_STANDARDS", ""))
+    return prompt.replace("{{CHECKS}}", checks)
+
+
 def collect():
     os.makedirs(OUT, exist_ok=True)
     pr = request("GET", f"/repos/{env('REPO')}/pulls/{env('PR')}")
@@ -207,14 +221,8 @@ def collect():
     }
     with open(f"{OUT}/context.json", "w", encoding="utf-8") as fh:
         json.dump(context, fh, indent=2)
-    template_path = os.environ.get("LOOP_REVIEW_PROMPT", os.path.join(os.path.dirname(__file__), "prompt.md"))
-    with open(template_path, encoding="utf-8") as fh:
-        template = fh.read()
-    prompt = template.replace("{{MODE}}", mode).replace("{{CONTEXT_PATH}}", f"{OUT}/context.json")
-    prompt = prompt.replace("{{DIFF_PATH}}", f"{OUT}/diff.patch").replace("{{RESULT_PATH}}", f"{OUT}/result.json")
-    prompt = prompt.replace("{{STANDARDS_PATH}}", os.environ.get("LOOP_STANDARDS", ""))
     with open(f"{OUT}/prompt.md", "w", encoding="utf-8") as fh:
-        fh.write(prompt)
+        fh.write(render_prompt(mode, os.environ.get("LOOP_RUN_CHECKS") == "true"))
     print(mode)
 
 

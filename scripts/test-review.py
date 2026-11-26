@@ -189,4 +189,13 @@ with tempfile.TemporaryDirectory() as out:
     os.remove(f"{out}/result.json")
     check("missing result.json fails the job", exit_code(lr.post) not in (0, None))
 
+os.environ.pop("LOOP_REVIEW_PROMPT", None)
+default_prompt = lr.render_prompt("full", run_checks=False)
+checks_prompt = lr.render_prompt("full", run_checks=True)
+check("the default prompt forbids running repository code",
+      "Do not run the repository's code" in default_prompt and "## Running checks" not in default_prompt)
+check("run_checks allows the loop contract's checks instead",
+      "## Running checks" in checks_prompt and "Do not run the repository's code" not in checks_prompt)
+check("no placeholder is left in either prompt", "{{" not in default_prompt + checks_prompt)
+
 sys.exit(1 if failures else 0)

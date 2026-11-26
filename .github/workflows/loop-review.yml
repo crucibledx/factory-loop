@@ -34,6 +34,13 @@ on:
         description: Ref of crucibledx/factory-loop to load the review prompt and org standards from.
         type: string
         default: v0
+      run_checks:
+        description: >-
+          Install the repo's toolchain (Bun and dependencies when it has bun.lock, actionlint when its loop contract
+          lists it) and let the reviewer run the loop contract's checks. This runs PR code in a job that holds
+          FACTORY_API_KEY and a write token, so enable it only where every PR author is trusted.
+        type: boolean
+        default: false
     secrets:
       FACTORY_API_KEY:
         required: true
@@ -62,19 +69,64 @@ jobs:
       LOOP_STANDARDS: ${{ github.workspace }}/.factory-loop/plugins/crucible-loop/skills/engineering-standards/SKILL.md
       LOOP_REVIEW_PROMPT: ${{ github.workspace }}/.factory-loop/review/prompt.md
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
           persist-credentials: false
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: crucibledx/factory-loop
           ref: ${{ inputs.loop_ref }}
           path: .factory-loop
           persist-credentials: false
       - id: collect
+        env:
+          LOOP_RUN_CHECKS: ${{ inputs.run_checks }}
         run: echo "mode=$(python3 .factory-loop/review/loop_review.py collect)" >> "$GITHUB_OUTPUT"
+      # run_checks: the repo's toolchain, so the reviewer can run the checks in its loop contract (collect puts the
+      # permission in the prompt). A failed install never blocks the review; the reviewer is told.
+      - name: Set up Bun
+        id: bun
+        if: inputs.run_checks && steps.collect.outputs.mode != 'gate' && hashFiles('bun.lock', 'bun.lockb') != ''
+        continue-on-error: true
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: ${{ hashFiles('.bun-version') != '' && '.bun-version' || '' }}
+      - name: Install dependencies
+        id: deps
+        if: inputs.run_checks && steps.collect.outputs.mode != 'gate' && hashFiles('bun.lock', 'bun.lockb') != ''
+        continue-on-error: true
+        env:
+          GH_TOKEN: ''
+        # Lifecycle scripts are PR code; skip them so installing runs nothing from the PR.
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: Install actionlint
+        id: actionlint
+        if: inputs.run_checks && steps.collect.outputs.mode != 'gate'
+        continue-on-error: true
+        env:
+          VERSION: 1.7.12
+          SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+        run: |
+          # The loop contract is .factory/loop-contract.md or a section of AGENTS.md.
+          if ! grep -sqF '`actionlint' .factory/loop-contract.md AGENTS.md; then
+            echo "The loop contract does not list actionlint; not installed."; exit 0
+          fi
+          archive="$RUNNER_TEMP/actionlint.tar.gz"
+          curl -fsSL -o "$archive" \
+            "https://github.com/rhysd/actionlint/releases/download/v${VERSION}/actionlint_${VERSION}_linux_amd64.tar.gz"
+          echo "$SHA256  $archive" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/bin"
+          tar -xzf "$archive" -C "$RUNNER_TEMP/bin" actionlint
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: Note a failed install
+        if: >-
+          inputs.run_checks && steps.collect.outputs.mode != 'gate' &&
+          (steps.bun.outcome == 'failure' || steps.deps.outcome == 'failure' || steps.actionlint.outcome == 'failure')
+        run: |
+          printf '\nA toolchain install failed on this runner. Report checks it breaks as could not run, never as findings.\n' \
+            >> "$LOOP_REVIEW_DIR/prompt.md"
       - name: Review
         if: steps.collect.outputs.mode != 'gate'
         env:

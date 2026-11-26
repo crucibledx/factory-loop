@@ -9,6 +9,8 @@ Inputs:
 - Org engineering standards: `{{STANDARDS_PATH}}` (skip if empty or missing). Also read the repo's `AGENTS.md`,
   `CONTRIBUTING.md`, `.factory/loop-contract.md`, and the spec the PR links, if present.
 
+{{CHECKS}}
+
 ## What to report
 
 Report every real problem **in one pass**. A later review must not discover problems that were already visible now;

@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- `loop-review` has a `run_checks` input (default `false`). When it is on, the job installs the repo's toolchain
+  before the review so the reviewer can run the checks in the repo's `.factory/loop-contract.md`: Bun (from
+  `.bun-version`, else `package.json`) and the dependencies, without lifecycle scripts, when the repo has `bun.lock`;
+  `actionlint` (checksum-verified) when the loop contract lists it. A failed install does not block the review, and
+  the reviewer is told. This runs PR code in a job with `FACTORY_API_KEY` and a write token, so turn it on only where
+  every PR author is trusted. Without it, the prompt now tells the reviewer not to run any repository code. Both checkouts move to `actions/checkout` v7.0.1 (Node 24), and every action in the job
+  is pinned to a commit SHA.
+
 ## v0.5.1 — 2026-11-26
 
 - `loop-automerge` merges an approved PR directly when it is already mergeable (`CLEAN`, or `UNSTABLE` because a
