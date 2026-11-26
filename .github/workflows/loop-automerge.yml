@@ -1,7 +1,9 @@
 # Keeps GitHub auto-merge tied to an allowed approver's approval of the current head.
 # On every review and every push it re-reads the PR and sets auto-merge on exactly when a login in `approvers` has
 # approved the head commit (scripts/automerge.sh). GitHub then merges once the branch ruleset is satisfied (required
-# approval, required checks, resolved conversations); this workflow checks nothing else itself.
+# approval, required checks, resolved conversations). GitHub refuses auto-merge on a PR that is already mergeable
+# (CLEAN, or UNSTABLE from a non-required check such as this job), so then the script merges the approved head itself,
+# after reading every required check of the base branch as passed on it.
 # It runs as the crucible-smith app so the merge triggers push workflows (merges made with GITHUB_TOKEN don't).
 name: Loop / auto-merge
 
@@ -71,6 +73,8 @@ jobs:
           permission-contents: write
           permission-pull-requests: write
           permission-workflows: write
+          permission-checks: read
+          permission-statuses: read
       - name: Reconcile auto-merge
         if: steps.config.outputs.enabled == 'true'
         env:
