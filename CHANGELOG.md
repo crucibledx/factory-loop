@@ -1,14 +1,31 @@
 # Changelog
 
-## Unreleased
+## v0.5.1 — 2026-11-26
 
 - `loop-automerge` merges an approved PR directly when it is already mergeable (`CLEAN`, or `UNSTABLE` because a
   non-required check such as its own job is pending or failed), where GitHub refuses to turn on auto-merge. It merges
   only the approved head, and only once every required check of the base branch (rulesets and branch protection) has
   passed on it; while one is still pending it turns on auto-merge as before. The app token now also reads checks and
   commit statuses.
+- README shows the multiplayer Slack diagram next to the delivery loop diagram, and the loop steps name the four
+  workstreams (Root routes code work to Forge, Ember and Other). `AGENTS.md` keeps both diagrams in sync with
+  `crucibledx/assets`.
+
+## v0.5.0 — 2026-11-25
+
+- New reusable `loop-ci` workflow for Bun repos: the format, lint and typecheck scripts that `package.json` defines,
+  tests (`bun test --pass-with-no-tests` by default), and an optional build, with the repo's commands as inputs. It
+  follows the repo's pinned Bun version and passes repos without `package.json` with a notice. The template ships a
+  `ci.yml` caller and `scripts/install.sh` adds it.
+- `loop-orchestrator` end-of-day summary has a usage per requester section (runs, agents, PRs) from the Slack ledger,
+  read by `scripts/slack_usage.py`.
 - `engineering-standards` has a Go section: layout, errors, package state, tests, and `golangci-lint`, each with a
   review severity.
+- `loop-review`: the review gate waits (up to 40 minutes) for the head's review run still in progress instead of
+  failing with "No completed review". The job needs `actions: read`.
+- `loop-review` runs the review exec with `--auto medium`, without the write token or checkout credentials; a
+  separate step posts the review.
+- README shows the delivery loop diagram from `crucibledx/assets`; `AGENTS.md` keeps it in sync with the loop.
 
 ## v0.4.0 — 2026-11-10
 
