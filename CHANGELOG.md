@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- `loop-review` installs the repo's toolchain before the review, so the reviewer can run the checks in the repo's
+  `.factory/loop-contract.md`: Bun (from `.bun-version`, else `package.json`) and the dependencies, without lifecycle
+  scripts, when the repo has `bun.lock`; `actionlint` (checksum-verified) when the loop contract lists it. A failed
+  install does not block the review. The prompt asks the reviewer to say which checks it ran. Both checkouts move to
+  `actions/checkout` v7.0.1 (Node 24), and every action in the job is pinned to a commit SHA.
 ## v0.5.1 — 2026-11-26
 
 - `loop-automerge` merges an approved PR directly when it is already mergeable (`CLEAN`, or `UNSTABLE` because a

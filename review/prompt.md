@@ -8,6 +8,9 @@ Inputs:
 - `{{DIFF_PATH}}`: the diff to review. Full mode: the whole PR. Follow-up mode: only the commits since the last review.
 - Org engineering standards: `{{STANDARDS_PATH}}` (skip if empty or missing). Also read the repo's `AGENTS.md`,
   `CONTRIBUTING.md`, `.factory/loop-contract.md`, and the spec the PR links, if present.
+- Tools: the runner has Bun and the installed dependencies when the repo has `bun.lock`, and `actionlint` when the
+  loop contract lists it. Run the loop contract's checks that the diff affects; say in `summary` which you ran and
+  which you could not.
 
 ## What to report
 

@@ -62,12 +62,12 @@ jobs:
       LOOP_STANDARDS: ${{ github.workspace }}/.factory-loop/plugins/crucible-loop/skills/engineering-standards/SKILL.md
       LOOP_REVIEW_PROMPT: ${{ github.workspace }}/.factory-loop/review/prompt.md
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
           persist-credentials: false
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: crucibledx/factory-loop
           ref: ${{ inputs.loop_ref }}
@@ -75,6 +75,38 @@ jobs:
           persist-credentials: false
       - id: collect
         run: echo "mode=$(python3 .factory-loop/review/loop_review.py collect)" >> "$GITHUB_OUTPUT"
+      # The repo's toolchain, so the reviewer can run the checks in its loop contract. A failed install never blocks
+      # the review; the reviewer reports what it could not run.
+      - name: Set up Bun
+        if: steps.collect.outputs.mode != 'gate' && hashFiles('bun.lock', 'bun.lockb') != ''
+        continue-on-error: true
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: ${{ hashFiles('.bun-version') != '' && '.bun-version' || '' }}
+      - name: Install dependencies
+        if: steps.collect.outputs.mode != 'gate' && hashFiles('bun.lock', 'bun.lockb') != ''
+        continue-on-error: true
+        env:
+          GH_TOKEN: ''
+        # Lifecycle scripts are PR code; skip them so installing runs nothing from the PR.
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: Install actionlint
+        if: steps.collect.outputs.mode != 'gate' && hashFiles('.factory/loop-contract.md') != ''
+        continue-on-error: true
+        env:
+          VERSION: 1.7.12
+          SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+        run: |
+          if ! grep -q actionlint .factory/loop-contract.md; then
+            echo "The loop contract does not list actionlint; not installed."; exit 0
+          fi
+          archive="$RUNNER_TEMP/actionlint.tar.gz"
+          curl -fsSL -o "$archive" \
+            "https://github.com/rhysd/actionlint/releases/download/v${VERSION}/actionlint_${VERSION}_linux_amd64.tar.gz"
+          echo "$SHA256  $archive" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/bin"
+          tar -xzf "$archive" -C "$RUNNER_TEMP/bin" actionlint
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
       - name: Review
         if: steps.collect.outputs.mode != 'gate'
         env:
