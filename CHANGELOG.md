@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- `loop-automerge` merges an approved PR directly when it is already mergeable (`CLEAN`, or `UNSTABLE` because a
+  non-required check such as its own job is pending or failed), where GitHub refuses to turn on auto-merge. It merges
+  only the approved head, and only once every required check of the base branch (rulesets and branch protection) has
+  passed on it. The app token now also reads checks and commit statuses.
 - `engineering-standards` has a Go section: layout, errors, package state, tests, and `golangci-lint`, each with a
   review severity.
 

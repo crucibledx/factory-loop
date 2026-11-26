@@ -83,7 +83,9 @@ The Factory Droid GitHub App must be installed on the org; workflows authenticat
 
 When an allowed approver (input `approvers`, default `NazarUsik`) approves a PR, `loop-automerge` turns on GitHub
 auto-merge for the approved commit, as the `crucible-smith` app. Every review and push re-checks it, so a new push
-turns it off until the new head is approved. GitHub merges once the branch ruleset is satisfied,
+turns it off until the new head is approved. If the PR is already mergeable (GitHub refuses auto-merge then), it merges
+the approved commit directly once every required check of the base branch has passed on it. GitHub merges once the
+branch ruleset is satisfied,
 so the ruleset is what makes it safe: require 1 approval from a code owner (`.github/CODEOWNERS`: `* @NazarUsik`),
 dismissed on new pushes, resolved conversations, and the
 `review / review` check plus the repo's CI checks. The repo also needs "Allow auto-merge" turned on and the
