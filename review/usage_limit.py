@@ -16,11 +16,12 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from loop_review import report, request  # noqa: E402
 
 TITLE = "Review usage limit"
-LIMIT_LINE = re.compile(r"\b402\b.*usage limit|usage limit.*\b402\b", re.IGNORECASE)
+# Only the CLI's own error line counts: the log also holds the reviewer's output, which may quote such an error.
+LIMIT_LINE = re.compile(r"^\s*Error during droid execution: 402\b.*usage limit", re.IGNORECASE)
 RESETS_IN = re.compile(r"resets in ((?:\s*\d+\s*(?:d|h|min|m|s)\b)+)", re.IGNORECASE)
 RESETS_AT = re.compile(r"resets at (\d{4}-\d\d-\d\dT\d\d:\d\dZ)")
 UNITS = {"d": 86400, "h": 3600, "min": 60, "m": 60, "s": 1}
-LOOKBACK_DAYS = 3
+LOOKBACK_DAYS = 8  # longer than the longest reset (the weekly limit), so a stopped run is still swept
 MAX_ATTEMPTS = 10  # a limit that never resets must not re-run the job forever
 
 
@@ -92,7 +93,7 @@ def stopped_at_limit(repo, job_id):
 
 
 def retry_run(repo, run, now):
-    """Re-run the failed jobs of run if its review job stopped at the usage limit. Returns a log line or None."""
+    """Re-run the review job of run if the usage limit stopped it. Returns a log line or None."""
     jobs = request("GET", f"/repos/{repo}/actions/runs/{run['id']}/jobs?filter=latest")["jobs"]
     review = next((j for j in jobs if j["name"].split(" / ")[-1] == "review" and j["conclusion"] == "failure"), None)
     if not review:
@@ -112,7 +113,8 @@ def retry_run(repo, run, now):
     pr = request("GET", f"/repos/{repo}/pulls/{number}")
     if pr["state"] != "open" or pr.get("draft") or pr["head"]["sha"] != run["head_sha"]:
         return f"{where}: PR #{number} is closed, a draft, or has a newer head; skipped"
-    request("POST", f"/repos/{repo}/actions/runs/{run['id']}/rerun-failed-jobs", {})
+    # Only the review job: other failed jobs of the run (auto-merge, for one) are not ours to repeat.
+    request("POST", f"/repos/{repo}/actions/jobs/{review['id']}/rerun", {})
     return f"{where}: re-ran the review for PR #{number}"
 
 
@@ -127,12 +129,18 @@ def retry():
         try:
             runs = list(paged(f"/repos/{name}/actions/runs?event=pull_request&status=failure&created=%3E%3D{since}",
                               "workflow_runs"))
-            for run in runs:
-                line = retry_run(name, run, now)
-                if line:
-                    lines.append(line)
         except RuntimeError as err:
             errors.append(f"{name}: {err}")
+            continue
+        for run in runs:
+            # One run that cannot be handled must not hide the rest of the repo's runs from every sweep.
+            try:
+                line = retry_run(name, run, now)
+            except (RuntimeError, KeyError, TypeError, ValueError) as err:
+                errors.append(f"{name} run {run.get('id')}: {err!r}")
+                continue
+            if line:
+                lines.append(line)
     report("\n".join([f"### {TITLE} retry", ""] + [f"- {ln}" for ln in lines or ["nothing to re-run"]]
                      + [f"- error: {e}" for e in errors]))
     if errors:

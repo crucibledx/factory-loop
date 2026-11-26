@@ -140,11 +140,14 @@ jobs:
           curl -fsSL https://app.factory.ai/cli | sh
           export PATH="$HOME/.local/bin:$PATH"
           log="$RUNNER_TEMP/droid-exec.log"
+          # set +e: keep droid's own exit status whether or not the shell has pipefail.
+          set +e
           droid exec --auto medium -m "${{ inputs.review_model }}" -r "$EFFORT" -f "$LOOP_REVIEW_DIR/prompt.md" 2>&1 | tee "$log"
           status=${PIPESTATUS[0]}
+          set -e
           if [ "$status" -ne 0 ]; then
             # A usage-limit stop is marked so it reads as one, and so loop-review-retry.yml re-runs it after the reset.
-            python3 .factory-loop/review/usage_limit.py note "$log"
+            python3 .factory-loop/review/usage_limit.py note "$log" || true
             exit "$status"
           fi
       - name: Post review

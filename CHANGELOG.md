@@ -11,8 +11,9 @@
   is pinned to a commit SHA.
 - When the Factory usage limit stops the reviewer (`droid exec` 402), `loop-review` reports a "Review usage limit"
   error with the reset time instead of an unexplained failure. A new scheduled workflow in this repo,
-  `loop-review-retry`, re-runs those review jobs across the org as the `crucible-smith` app once the limit has
-  reset, so the PR gets its review without a manual re-run. The app needs Actions write on its installation.
+  `loop-review-retry`, re-runs those review jobs (only the review job) across the org as the `crucible-smith` app
+  once the limit has reset, so the PR gets its review without a manual re-run. The app's installation needs Actions
+  write, Checks read and Pull requests read, and this repo needs `SMITH_CLIENT_ID` and `SMITH_PRIVATE_KEY`.
 
 ## v0.5.1 — 2026-11-26
 

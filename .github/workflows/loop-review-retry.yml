@@ -2,9 +2,10 @@
 # loop-review.yml marks such a stop with a "Review usage limit" annotation carrying the reset time
 # (review/usage_limit.py note). Nothing else re-runs that job, so without this sweep the PR's review check stays red
 # until someone re-runs it by hand. Every 30 minutes, this job looks at failed pull_request runs from the last
-# 3 days in every repo the crucible-smith app is installed on, and re-runs the failed jobs of a run whose review job
-# carries the annotation, once its reset time has passed, while the PR is open, not a draft, and still at that head.
-# It runs as the app because the Actions token of this repo cannot re-run jobs in other repos.
+# 8 days in every repo the crucible-smith app is installed on, and re-runs a review job that carries the annotation,
+# once its reset time has passed, while the PR is open, not a draft, and still at that head.
+# It runs as the app because the Actions token of this repo cannot re-run jobs in other repos. The app's installation
+# needs Actions write, Checks read and Pull requests read; this repo needs SMITH_CLIENT_ID and SMITH_PRIVATE_KEY.
 name: Loop / review retry
 
 on:
@@ -23,7 +24,8 @@ jobs:
       group: loop-review-retry
       cancel-in-progress: false
     steps:
-      - uses: actions/checkout@v4
+      # Pinned: this job holds an org-wide token with Actions write.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Get crucible-smith token
