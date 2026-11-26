@@ -8,23 +8,40 @@ it.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://github.com/crucibledx/assets/raw/main/factory-loop/diagrams/dark/delivery-loop.svg">
-  <img alt="Crucible delivery loop: board stages, who acts at each stage, and how the loop fixes itself" src="https://github.com/crucibledx/assets/raw/main/factory-loop/diagrams/light/delivery-loop.svg">
+  <img alt="Crucible delivery loop: board stages, Root routing code work to the Forge, Ember and Other workstreams, who acts at each stage, and how the loop fixes itself" src="https://github.com/crucibledx/assets/raw/main/factory-loop/diagrams/light/delivery-loop.svg">
 </picture>
 
 1. A request arrives in Slack. An idea goes through discovery and a spec PR checked by two reviewer droids; merging
-   the spec creates one `loop:implement` issue per target repo. Code work goes straight to the orchestrator.
-2. The Workstream orchestrator starts one agent per issue, each in its own worktree and branch.
+   the spec creates one `loop:implement` issue per target repo. Code work that the Slack bridge does not route straight
+   to a workstream (see below) goes to the Root workstream, which opens the issue with a `ws:*` label and hands it to
+   the Forge, Ember or Other workstream.
+2. Each workstream's orchestrator starts one agent per issue, each in its own worktree and branch.
 3. The agent implements, runs the repo's checks and the local `verifier` and `code-reviewer` droids, and opens a
    draft PR. It marks the PR ready once they pass.
 4. `loop-review` reviews the PR. The `review / review` check stays red while a P0 or P1 finding is open.
 5. The agent fixes the findings, replies on each thread, and pushes. The next review covers the new commits and
    resolves what is fixed.
 6. With CI and the review gate green, Nazar reviews and approves. His approval turns on auto-merge, and GitHub merges.
-7. When an agent hits a problem in the loop itself, it reports it to the orchestrator. The fix ships as a PR to this
-   repo through the same gate, and moving the `v0` tag rolls workflow fixes out to every repo.
+7. When an agent hits a problem in the loop itself, it reports it to its workstream's orchestrator. The fix ships as a
+   PR to this repo through the same gate, and moving the `v0` tag rolls workflow fixes out to every repo.
 
-The diagram source is
+### Requests from Slack
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://github.com/crucibledx/assets/raw/main/factory-loop/diagrams/dark/multiplayer-slack.svg">
+  <img alt="Multiplayer Slack: messages from every Slack user go through the Slack bridge to the Root, Forge, Ember and Other workstreams, traced by Ember" src="https://github.com/crucibledx/assets/raw/main/factory-loop/diagrams/light/multiplayer-slack.svg">
+</picture>
+
+Anyone in the Slack channel can make a request. The Slack bridge (a Cloudflare Worker) checks and acknowledges each
+message and pushes it to a workstream: by channel, by the workstream that claimed the thread, or by a `forge:`,
+`ember:` or `other:` prefix or an @mention; anything else goes to Root. The workstream replies in the requester's
+thread. Ember joins every session into one tree (Root, workstream, agent) and attributes it to the active Slack user,
+and `slack-ledger.jsonl` records usage per requester.
+
+The diagram sources are
 [`factory-loop/diagrams/delivery-loop.drawio`](https://github.com/crucibledx/assets/blob/main/factory-loop/diagrams/delivery-loop.drawio)
+and
+[`factory-loop/diagrams/multiplayer-slack.drawio`](https://github.com/crucibledx/assets/blob/main/factory-loop/diagrams/multiplayer-slack.drawio)
 in `crucibledx/assets`.
 
 ## What's inside
