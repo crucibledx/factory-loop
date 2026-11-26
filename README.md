@@ -22,6 +22,7 @@ it.
 5. The agent fixes the findings, replies on each thread, and pushes. The next review covers the new commits and
    resolves what is fixed.
 6. With CI and the review gate green, Nazar reviews and approves. His approval turns on auto-merge, and GitHub merges.
+   If the PR is already mergeable, the `crucible-smith` app merges the approved commit once its required checks pass.
 7. When an agent hits a problem in the loop itself, it reports it to its workstream's orchestrator. The fix ships as a
    PR to this repo through the same gate, and moving the `v0` tag rolls workflow fixes out to every repo.
 
@@ -84,9 +85,8 @@ The Factory Droid GitHub App must be installed on the org; workflows authenticat
 When an allowed approver (input `approvers`, default `NazarUsik`) approves a PR, `loop-automerge` turns on GitHub
 auto-merge for the approved commit, as the `crucible-smith` app. Every review and push re-checks it, so a new push
 turns it off until the new head is approved. If the PR is already mergeable (GitHub refuses auto-merge then), it merges
-the approved commit directly once every required check of the base branch has passed on it. GitHub merges once the
-branch ruleset is satisfied,
-so the ruleset is what makes it safe: require 1 approval from a code owner (`.github/CODEOWNERS`: `* @NazarUsik`),
+the approved commit directly once every required check of the base branch has passed on it. Either way, GitHub merges
+only once the branch ruleset is satisfied, so the ruleset is what makes it safe: require 1 approval from a code owner (`.github/CODEOWNERS`: `* @NazarUsik`),
 dismissed on new pushes, resolved conversations, and the
 `review / review` check plus the repo's CI checks. The repo also needs "Allow auto-merge" turned on and the
 `SMITH_CLIENT_ID` variable and `SMITH_PRIVATE_KEY` secret. Without them the job skips with a notice. Private repos on the

@@ -9,13 +9,14 @@ mkdir "$tmp/bin"
 # STUB_PR: head, auto-merge on, eligible, then "login state commit" lines. STUB_MERGE_STATE: mergeStateStatus.
 # STUB_RULES / STUB_PROTECTION: required checks ("req" lines). STUB_RUNS / STUB_STATUSES: checks on commit abc only,
 # so a lookup of any other commit is an unexpected call. STUB_HEAD_NOW: the head re-read right before merging.
+# STUB_FAIL_ON: any call whose arguments contain this text fails.
 cat > "$tmp/bin/gh" <<'STUB'
 #!/bin/sh
+case "$*" in *"${STUB_FAIL_ON:-#none#}"*) echo "HTTP 500" >&2; exit 1 ;; esac
 case "$*" in
   "api repos/o/r --jq"*) [ -n "${STUB_API_FAIL:-}" ] && { echo "HTTP 503" >&2; exit 1; }; echo "$STUB_ALLOW" ;;
   "api graphql"*) [ -n "${STUB_GQL_FAIL:-}" ] && { echo "HTTP 502" >&2; exit 1; }; printf '%b\n' "$STUB_PR" ;;
-  "api --paginate repos/o/r/rules/branches/main?"*)
-    [ -n "${STUB_RULES_FAIL:-}" ] && { echo "HTTP 403" >&2; exit 1; }; printf '%b' "$STUB_RULES" ;;
+  "api --paginate repos/o/r/rules/branches/main?"*) printf '%b' "$STUB_RULES" ;;
   "api repos/o/r/branches/main --jq"*) printf '%b' "${STUB_PROTECTION:-}" ;;
   "api --paginate repos/o/r/commits/abc/check-runs?"*) printf '%b' "$STUB_RUNS" ;;
   "api --paginate repos/o/r/commits/abc/status?"*) printf '%b' "${STUB_STATUSES:-}" ;;
@@ -74,6 +75,7 @@ check "merge failure fails" 1 "$on" STUB_MERGE_RC=1
 # Mergeable PRs: GitHub refuses auto-merge, so an approved head with passing required checks is merged directly.
 check "BLOCKED: turn on auto-merge" 0 "$on" STUB_MERGE_STATE=BLOCKED
 check "other states keep auto-merge" 0 "$on" STUB_MERGE_STATE=BEHIND
+check "UNKNOWN keeps auto-merge" 0 "$on" STUB_MERGE_STATE=UNKNOWN
 check "CLEAN, required checks pass: merge" 0 "$now" STUB_MERGE_STATE=CLEAN
 check "UNSTABLE, own job pending: merge" 0 "$now" STUB_MERGE_STATE=UNSTABLE
 check "UNSTABLE, non-required check failed: merge" 0 "$now" STUB_MERGE_STATE=UNSTABLE \
@@ -87,21 +89,28 @@ check "latest run counts: newer success" 0 "$now" STUB_MERGE_STATE=CLEAN \
   STUB_RUNS='run\t5\t15368\tcompleted\tcancelled\treview / review\nrun\t9\t15368\tcompleted\tsuccess\treview / review\n'
 check "latest run counts: newer failure" 1 "" STUB_MERGE_STATE=CLEAN \
   STUB_RUNS='run\t9\t15368\tcompleted\tfailure\treview / review\nrun\t5\t15368\tcompleted\tsuccess\treview / review\n'
-check "required check pending: no merge" 1 "" STUB_MERGE_STATE=UNSTABLE \
+check "required check pending: auto-merge, no merge" 0 "$on" STUB_MERGE_STATE=UNSTABLE \
   STUB_RUNS='run\t5\t15368\tin_progress\t\treview / review\n'
-check "required check missing: no merge" 1 "" STUB_MERGE_STATE=CLEAN STUB_RUNS=''
+check "required check missing: auto-merge, no merge" 0 "$on" STUB_MERGE_STATE=CLEAN STUB_RUNS=''
+check "pending and failed required checks: fails" 1 "" STUB_MERGE_STATE=CLEAN STUB_RULES='req\ta\t\nreq\tb\t\n' \
+  STUB_RUNS='run\t1\t9\tqueued\t\ta\nrun\t2\t9\tcompleted\ttimed_out\tb\n'
 check "required check failed: no merge" 1 "" STUB_MERGE_STATE=UNSTABLE \
   STUB_RUNS='run\t5\t15368\tcompleted\tfailure\treview / review\n'
-check "required check from another app: no merge" 1 "" STUB_MERGE_STATE=CLEAN \
+check "required check only from another app: auto-merge, no merge" 0 "$on" STUB_MERGE_STATE=CLEAN \
   STUB_RUNS='run\t5\t999\tcompleted\tsuccess\treview / review\n'
 check "required check without app: any app counts" 0 "$now" STUB_MERGE_STATE=CLEAN \
   STUB_RULES='req\tci\t\n' STUB_RUNS='run\t5\t999\tcompleted\tsuccess\tci\n'
 check "required commit status success: merge" 0 "$now" STUB_MERGE_STATE=CLEAN \
   STUB_RULES='req\tlegacy\t\n' STUB_RUNS='' STUB_STATUSES='status\tsuccess\tlegacy\n'
-check "required commit status pending: no merge" 1 "" STUB_MERGE_STATE=CLEAN \
+check "required commit status pending: auto-merge, no merge" 0 "$on" STUB_MERGE_STATE=CLEAN \
   STUB_RULES='req\tlegacy\t\n' STUB_RUNS='' STUB_STATUSES='status\tpending\tlegacy\n'
-check "branch protection checks are required too" 1 "" STUB_MERGE_STATE=CLEAN STUB_PROTECTION='req\tlint\t\n'
-check "rules lookup failure fails" 1 "" STUB_MERGE_STATE=CLEAN STUB_RULES_FAIL=1
+check "required commit status error: fails" 1 "" STUB_MERGE_STATE=CLEAN \
+  STUB_RULES='req\tlegacy\t\n' STUB_RUNS='' STUB_STATUSES='status\terror\tlegacy\n'
+check "branch protection checks are required too" 1 "" STUB_MERGE_STATE=CLEAN STUB_PROTECTION='req\tlint\t\n' \
+  STUB_RUNS='run\t5\t15368\tcompleted\tsuccess\treview / review\nrun\t6\t9\tcompleted\tfailure\tlint\n'
+for call in "json mergeStateStatus" rules/branches "api repos/o/r/branches" check-runs commits/abc/status "json headRefOid"; do
+  check "$call lookup failure fails" 1 "" STUB_MERGE_STATE=CLEAN STUB_FAIL_ON="$call"
+done
 check "head moved before merge: no call" 0 "" STUB_MERGE_STATE=CLEAN STUB_HEAD_NOW=def
 check "CLEAN, already on: no call" 0 "" STUB_MERGE_STATE=CLEAN STUB_PR='abc\ntrue\ntrue\nnazar APPROVED abc'
 check "CLEAN, approval on old commit: no call" 0 "" STUB_MERGE_STATE=CLEAN STUB_PR='abc\nfalse\ntrue\nnazar APPROVED old'

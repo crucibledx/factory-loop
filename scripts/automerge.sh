@@ -47,10 +47,11 @@ $reviews
 REVIEWS
 fi
 
-# Prints the required checks of branch $1 that have not passed on commit $2, one per line.
-# Required checks come from the branch rules (rulesets) and classic branch protection. Only the latest run of a check
-# counts; success, neutral, and skipped pass, as on GitHub. A required check that is missing or pending is printed.
-failing_required_checks() {
+# Prints "pending<TAB>check" or "failed<TAB>check" for each required check of branch $1 that has not passed on
+# commit $2. Required checks come from the branch rules (rulesets) and classic branch protection. Only the latest run
+# of a check counts; success, neutral, and skipped pass, as on GitHub. A missing check is pending: it may not have
+# started yet.
+required_checks_not_passed() {
   rules=$(gh api --paginate "repos/$REPO/rules/branches/$1?per_page=100" \
     --jq '.[] | select(.type == "required_status_checks") | .parameters.required_status_checks[]
           | ["req", .context, (.integration_id // "" | tostring)] | @tsv')
@@ -62,18 +63,22 @@ failing_required_checks() {
     --jq '.statuses[] | ["status", .state, .context] | @tsv')
   printf '%s\n%s\n%s\n%s\n' "$runs" "$statuses" "$rules" "$protection" | awk -F '\t' '
     $1 == "run" {
-      ok = ($4 == "completed" && ($5 == "success" || $5 == "neutral" || $5 == "skipped"))
+      v = $4 != "completed" ? "pending" : ($5 == "success" || $5 == "neutral" || $5 == "skipped") ? "passed" : "failed"
       k = $6 SUBSEP $3
-      if (!(k in id) || $2 + 0 > id[k]) { id[k] = $2 + 0; pass[k] = ok }
-      if (!($6 in anyid) || $2 + 0 > anyid[$6]) { anyid[$6] = $2 + 0; anypass[$6] = ok }
+      if (!(k in id) || $2 + 0 > id[k]) { id[k] = $2 + 0; run[k] = v }
+      if (!($6 in anyid) || $2 + 0 > anyid[$6]) { anyid[$6] = $2 + 0; anyrun[$6] = v }
     }
-    $1 == "status" { spass[$3] = ($2 == "success") }
+    $1 == "status" { status[$3] = $2 == "success" ? "passed" : $2 == "pending" ? "pending" : "failed" }
     $1 == "req" && !(($2 SUBSEP $3) in seen) { seen[$2, $3] = 1; n++; ctx[n] = $2; app[n] = $3 }
     END {
       for (i = 1; i <= n; i++) {
-        if (app[i] != "") ok = ((ctx[i] SUBSEP app[i]) in pass) && pass[ctx[i], app[i]]
-        else ok = ((ctx[i] in anypass) && anypass[ctx[i]]) || ((ctx[i] in spass) && spass[ctx[i]])
-        if (!ok) print ctx[i]
+        c = ctx[i]
+        if (app[i] != "") v = ((c SUBSEP app[i]) in run) ? run[c, app[i]] : "pending"
+        else {
+          r = (c in anyrun) ? anyrun[c] : ""; s = (c in status) ? status[c] : ""
+          v = (r == "passed" || s == "passed") ? "passed" : (r == "failed" || s == "failed") ? "failed" : "pending"
+        }
+        if (v != "passed") print v "\t" c
       }
     }'
 }
@@ -82,29 +87,37 @@ if [ "$approved" = "true" ] && [ "$on" != "true" ]; then
   pr_state=$(gh pr view "$PR" --repo "$REPO" --json mergeStateStatus,baseRefName --jq '"\(.mergeStateStatus) \(.baseRefName)"')
   merge_state=${pr_state%% *}
   base=${pr_state#* }
+  merge_now=false
   case "$merge_state" in
     CLEAN|UNSTABLE)
-      failing=$(failing_required_checks "$base" "$head")
-      if [ -n "$failing" ]; then
-        failing=$(printf '%s\n' "$failing" | paste -sd ',' - | sed 's/,/, /g')
-        echo "::error::$REPO#$PR is $merge_state, but required checks have not passed on $head: $failing. Merge by hand."
+      checks=$(required_checks_not_passed "$base" "$head")
+      failed=$(printf '%s\n' "$checks" | awk -F '\t' '$1 == "failed" { print $2 }' | paste -sd ',' - | sed 's/,/, /g')
+      pending=$(printf '%s\n' "$checks" | awk -F '\t' '$1 == "pending" { print $2 }' | paste -sd ',' - | sed 's/,/, /g')
+      if [ -n "$failed" ]; then
+        echo "::error::$REPO#$PR is $merge_state, but required checks failed on $head: $failed. Merge by hand."
         exit 1
+      elif [ -n "$pending" ]; then
+        # GitHub's merge state can lag a required check that just started; auto-merge waits for it.
+        echo "::notice::Required checks are still pending on $head: $pending. Turning on auto-merge instead."
+      else
+        merge_now=true
       fi
-      now=$(gh pr view "$PR" --repo "$REPO" --json headRefOid --jq .headRefOid)
-      if [ "$now" != "$head" ]; then
-        echo "::notice::$REPO#$PR moved from $head to $now; not merging. The push re-runs this check."
-        exit 0
-      fi
-      # --match-head-commit: never merge a commit other than the approved head.
-      gh pr merge "$PR" --repo "$REPO" "--$METHOD" --match-head-commit "$head"
-      echo "Merged $REPO#$PR at $head ($METHOD): it was $merge_state and its required checks passed."
-      ;;
-    *)
-      # --match-head-commit: never merge a commit other than the approved head.
-      gh pr merge "$PR" --repo "$REPO" --auto "--$METHOD" --match-head-commit "$head"
-      echo "Auto-merge is on for $REPO#$PR at $head ($METHOD)."
       ;;
   esac
+  if [ "$merge_now" = "true" ]; then
+    now=$(gh pr view "$PR" --repo "$REPO" --json headRefOid --jq .headRefOid)
+    if [ "$now" != "$head" ]; then
+      echo "::notice::$REPO#$PR moved from $head to $now; not merging. The push re-runs this check."
+      exit 0
+    fi
+    # --match-head-commit: never merge a commit other than the approved head.
+    gh pr merge "$PR" --repo "$REPO" "--$METHOD" --match-head-commit "$head"
+    echo "Merged $REPO#$PR at $head ($METHOD): it was $merge_state and its required checks passed."
+  else
+    # --match-head-commit: never merge a commit other than the approved head.
+    gh pr merge "$PR" --repo "$REPO" --auto "--$METHOD" --match-head-commit "$head"
+    echo "Auto-merge is on for $REPO#$PR at $head ($METHOD)."
+  fi
 elif [ "$approved" != "true" ] && [ "$on" = "true" ]; then
   gh pr merge "$PR" --repo "$REPO" --disable-auto
   echo "Auto-merge is off for $REPO#$PR: no approval from $APPROVERS on head $head."
