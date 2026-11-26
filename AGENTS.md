@@ -13,9 +13,11 @@ Org context: `crucibledx/hq` `AGENTS.md`.
   is breaking and needs a new major tag (`v1`).
 - Never weaken the guard hook (no pushes to `main`, no force pushes, no merges by agents) without Nazar's explicit
   approval.
-- The README's loop diagram lives in `crucibledx/assets`: source `factory-loop/diagrams/delivery-loop.drawio`, renders
-  `factory-loop/diagrams/{light,dark}/delivery-loop.svg`. A change to the loop flow (stages, who acts, gates, the
-  self-fix path) ships with an assets PR that updates the source and both renders. Link the two PRs to each other.
+- The README's diagrams live in `crucibledx/assets`: sources
+  `factory-loop/diagrams/{delivery-loop,multiplayer-slack}.drawio`, renders
+  `factory-loop/diagrams/{light,dark}/<name>.svg`. A change to the loop flow (stages, who acts, gates, the self-fix
+  path) or the Slack routing ships with an assets PR that updates the source and both renders. Link the two PRs to
+  each other.
 
 ## Checks
 
