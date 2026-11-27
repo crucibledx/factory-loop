@@ -196,8 +196,9 @@ Tests, in three layers like forge-cli (unit next to the code, contracts, e2e):
   real network or credentials. Every command or endpoint the repo implements has at least one success and one
   failure case (exit code and message). [P2]
 - Each e2e package's `TestMain` builds the binary through one shared helper package (`e2e/harness`): into a
-  directory from `os.MkdirTemp`, named `name + ".exe"` on Windows, removed after `m.Run()`. `TestMain` returns
-  `m.Run()`'s code instead of calling `os.Exit`, so the cleanup runs. [P2]
+  directory from `os.MkdirTemp`, named `name + ".exe"` on Windows, removed after `m.Run()`. `TestMain` then returns
+  without a value (since Go 1.15 the binary exits with `m.Run()`'s code); it never calls `os.Exit`, which would
+  skip the cleanup. [P2]
 - `e2e/` sits behind the `e2e` build tag and runs with `make e2e`; port suites run with `make test`; `make check`
   runs both. The golangci-lint config sets `run.build-tags: [e2e]` and `make lint` vets with `-tags e2e`, so tagged
   code is linted too. [P2]
