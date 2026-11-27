@@ -22,7 +22,8 @@ Org context: `crucibledx/hq` `AGENTS.md`.
 ## Checks
 
 `sh scripts/check.sh` runs them all; CI's `checks` job (`.github/workflows/self-checks.yml`) runs the same script on
-every PR and on `main`. It needs `python3`, `git`, `shellcheck` and `actionlint` 1.7.12 (the version CI pins).
+every PR and on `main`. It needs `python3`, `git` 2.38 or later, `shellcheck` and `actionlint` 1.7.12 (the version
+CI pins).
 
 - Every tracked `scripts/test-*`: `.py` with `python3`, `.sh` with `sh`. A new test is picked up by its name once
   it is added to git.
