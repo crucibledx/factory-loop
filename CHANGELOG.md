@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.7.0 — 2026-11-27
 
 - `implement-spec`: after pushing to a draft PR, poll `gh pr view --json headRefOid` until it shows the pushed
   commit (every few seconds, give up with a clear error after about 60 seconds) before `gh pr ready`. GitHub lags
