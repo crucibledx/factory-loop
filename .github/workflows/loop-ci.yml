@@ -1,8 +1,12 @@
 name: Loop / CI
 
-# Org CI for Bun repos: quality (format, lint, typecheck), tests, build.
-# Scripts listed in an input run only when package.json defines them, so one caller fits every repo.
-# Repos without package.json (docs-only) pass with a notice.
+# Org CI: quality, tests and build with the repo's toolchain.
+# The stack (bun, go or none) and the commands come from .factory/toolchain.json; without one the stack is inferred
+# (bun.lock or package.json: bun, go.mod: go, otherwise none). scripts/toolchain.py resolves them in the resolve job:
+# inputs the caller sets win over the file, and the file over the stack's defaults. Package scripts in
+# quality_scripts run only when package.json defines them, so one caller fits every Bun repo.
+# Tests run in one lane per runner in the declaration's `os`. The test job gates on every lane, so the required check
+# stays `ci / test` however many lanes there are.
 
 on:
   workflow_call:
@@ -12,19 +16,25 @@ on:
         type: string
         default: ""
       quality_scripts:
-        description: Space-separated package.json scripts for the quality job.
+        description: >-
+          Space-separated package.json scripts for the quality job (bun stack). Empty uses checks.quality from
+          .factory/toolchain.json, then the stack's default (format:check lint typecheck for bun, make lint for go).
         type: string
-        default: format:check lint typecheck
+        default: ""
       test_command:
-        description: Test command. Empty to skip.
+        description: >-
+          Test command. Empty uses checks.test from .factory/toolchain.json, then the stack's default
+          (bun test --pass-with-no-tests for bun, make test for go). Set checks.test to "" to skip tests.
         type: string
-        default: bun test --pass-with-no-tests
+        default: ""
       junit_paths:
         description: JUnit XML glob written by test_command, published as a check. Empty to skip.
         type: string
         default: ""
       build_command:
-        description: Build command. Empty to skip the build job.
+        description: >-
+          Build command. Empty uses checks.build from .factory/toolchain.json, then the stack's default (make build
+          for go, none for bun). The build job runs only when a build command is set.
         type: string
         default: ""
       build_verify:
@@ -35,97 +45,159 @@ on:
         description: Check out Git LFS files.
         type: boolean
         default: false
+      loop_ref:
+        description: Ref of crucibledx/factory-loop to load the toolchain resolver and setup from; match the `uses:` ref.
+        type: string
+        default: v0
 
 permissions:
   contents: read
 
 jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      stack: ${{ steps.toolchain.outputs.stack }}
+      os: ${{ steps.toolchain.outputs.os }}
+      multi_os: ${{ steps.toolchain.outputs.multi_os }}
+      quality: ${{ steps.toolchain.outputs.quality }}
+      test: ${{ steps.toolchain.outputs.test }}
+      build: ${{ steps.toolchain.outputs.build }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: crucibledx/factory-loop
+          ref: ${{ inputs.loop_ref }}
+          path: .factory-loop
+          persist-credentials: false
+      - id: toolchain
+        env:
+          QUALITY_SCRIPTS: ${{ inputs.quality_scripts }}
+          TEST_COMMAND: ${{ inputs.test_command }}
+          BUILD_COMMAND: ${{ inputs.build_command }}
+        run: python3 .factory-loop/scripts/toolchain.py
+
   quality:
+    needs: resolve
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           lfs: ${{ inputs.lfs }}
-      - id: pkg
-        run: |
-          if [ -f package.json ]; then echo "present=true" >> "$GITHUB_OUTPUT"; else
-            echo "present=false" >> "$GITHUB_OUTPUT"; echo "::notice::No package.json, nothing to check."; fi
-      - if: steps.pkg.outputs.present == 'true'
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      - if: needs.resolve.outputs.quality != ''
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          repository: crucibledx/factory-loop
+          ref: ${{ inputs.loop_ref }}
+          path: .factory-loop
+          persist-credentials: false
+      - if: needs.resolve.outputs.quality != ''
+        uses: ./.factory-loop/.github/actions/setup-toolchain
+        with:
+          stack: ${{ needs.resolve.outputs.stack }}
           bun-version: ${{ inputs.bun_version }}
-          bun-version-file: ${{ inputs.bun_version == '' && hashFiles('.bun-version') != '' && '.bun-version' || '' }}
-      - if: steps.pkg.outputs.present == 'true'
-        run: bun install --frozen-lockfile
-      - if: steps.pkg.outputs.present == 'true'
-        env:
-          SCRIPTS: ${{ inputs.quality_scripts }}
+      - env:
+          QUALITY: ${{ needs.resolve.outputs.quality }}
         run: |
-          set -f # script names are data, not glob patterns
-          for script in $SCRIPTS; do
-            if SCRIPT="$script" bun -e "process.exit(require('./package.json').scripts?.[process.env.SCRIPT] ? 0 : 1)"; then
-              echo "::group::bun run $script"; bun run "$script"; echo "::endgroup::"
-            else
-              echo "::notice::Script $script not defined, skipped."
-            fi
-          done
+          if [ -z "$QUALITY" ]; then echo "::notice::No quality checks for this repo."; exit 0; fi
+          while IFS= read -r cmd; do
+            [ -n "$cmd" ] || continue
+            echo "::group::$cmd"; bash -eo pipefail -c "$cmd"; echo "::endgroup::"
+          done <<< "$QUALITY"
 
-  test:
-    runs-on: ubuntu-latest
+  test-lane:
+    needs: resolve
+    if: needs.resolve.outputs.test != ''
+    name: test-lane (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ fromJSON(needs.resolve.outputs.os) }}
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     permissions:
       contents: read
       checks: write
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           lfs: ${{ inputs.lfs }}
-      - id: pkg
-        env:
-          TEST_COMMAND: ${{ inputs.test_command }}
-        run: |
-          if [ ! -f package.json ]; then echo "::notice::No package.json, no tests to run."; echo "present=false" >> "$GITHUB_OUTPUT"
-          elif [ -z "$TEST_COMMAND" ]; then echo "::notice::test_command is empty, tests skipped."; echo "present=false" >> "$GITHUB_OUTPUT"
-          else echo "present=true" >> "$GITHUB_OUTPUT"; fi
-      - if: steps.pkg.outputs.present == 'true'
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          repository: crucibledx/factory-loop
+          ref: ${{ inputs.loop_ref }}
+          path: .factory-loop
+          persist-credentials: false
+      - uses: ./.factory-loop/.github/actions/setup-toolchain
+        with:
+          stack: ${{ needs.resolve.outputs.stack }}
           bun-version: ${{ inputs.bun_version }}
-          bun-version-file: ${{ inputs.bun_version == '' && hashFiles('.bun-version') != '' && '.bun-version' || '' }}
-      - if: steps.pkg.outputs.present == 'true'
-        run: bun install --frozen-lockfile
-      - if: steps.pkg.outputs.present == 'true'
-        env:
-          TEST_COMMAND: ${{ inputs.test_command }}
+      - env:
+          TEST_COMMAND: ${{ needs.resolve.outputs.test }}
         run: bash -eo pipefail -c "$TEST_COMMAND"
       # Fork PRs get a read-only token, so the report could not create its check run; the test step still gates.
       - if: >-
-          !cancelled() && steps.pkg.outputs.present == 'true' && inputs.junit_paths != '' &&
+          !cancelled() && inputs.junit_paths != '' &&
           (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         uses: mikepenz/action-junit-report@a16be3a69023e9bd7e748ede768b3282ea7b30ce # v6.7.1
         with:
           report_paths: ${{ inputs.junit_paths }}
           include_passed: true
+          # One report per lane; a single lane keeps the action's default check name.
+          check_name: ${{ needs.resolve.outputs.multi_os == 'true' && format('JUnit Test Report ({0})', matrix.os) || 'JUnit Test Report' }}
+
+  # The required `ci / test` check: passes only when every lane passed, or when there are no tests to run.
+  test:
+    needs: [resolve, test-lane]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - env:
+          RESOLVE: ${{ needs.resolve.result }}
+          LANES: ${{ needs.test-lane.result }}
+          TEST_COMMAND: ${{ needs.resolve.outputs.test }}
+        run: |
+          if [ "$RESOLVE" != success ]; then
+            echo "::error::The toolchain did not resolve ($RESOLVE); see the ci / resolve job."; exit 1
+          fi
+          case "$LANES" in
+            success) echo "Every test lane passed." ;;
+            skipped)
+              if [ -n "$TEST_COMMAND" ]; then echo "::error::The test lanes were skipped."; exit 1; fi
+              echo "::notice::No test command, tests skipped." ;;
+            *) echo "::error::A test lane did not pass ($LANES); see the ci / test-lane jobs."; exit 1 ;;
+          esac
 
   build:
-    if: inputs.build_command != ''
-    needs: [quality, test]
+    needs: [resolve, quality, test]
+    if: needs.resolve.outputs.build != ''
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           lfs: ${{ inputs.lfs }}
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          repository: crucibledx/factory-loop
+          ref: ${{ inputs.loop_ref }}
+          path: .factory-loop
+          persist-credentials: false
+      - uses: ./.factory-loop/.github/actions/setup-toolchain
+        with:
+          stack: ${{ needs.resolve.outputs.stack }}
           bun-version: ${{ inputs.bun_version }}
-          bun-version-file: ${{ inputs.bun_version == '' && hashFiles('.bun-version') != '' && '.bun-version' || '' }}
-      - run: |
-          if [ -f package.json ]; then bun install --frozen-lockfile; else
-            echo "::notice::No package.json, dependencies not installed."; fi
       - env:
-          BUILD_COMMAND: ${{ inputs.build_command }}
+          BUILD_COMMAND: ${{ needs.resolve.outputs.build }}
           BUILD_VERIFY: ${{ inputs.build_verify }}
         run: |
           bash -eo pipefail -c "$BUILD_COMMAND"

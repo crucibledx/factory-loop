@@ -1,0 +1,53 @@
+name: Set up toolchain
+description: >-
+  Installs a stack's toolchain and the repo's dependencies, for the stack scripts/toolchain.py resolved. Runs in the
+  caller repo's checkout.
+
+inputs:
+  stack:
+    description: bun, go or none.
+    required: true
+  bun-version:
+    description: Bun version. Empty uses .bun-version, then package.json (packageManager, engines.bun), then latest.
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - if: inputs.stack != 'bun' && inputs.stack != 'go' && inputs.stack != 'none'
+      shell: bash
+      env:
+        STACK: ${{ inputs.stack }}
+      run: |
+        echo "::error::Unknown stack '$STACK' (expected bun, go or none)."
+        exit 1
+
+    - id: bun-file
+      if: inputs.stack == 'bun'
+      shell: bash
+      env:
+        BUN_VERSION: ${{ inputs.bun-version }}
+      run: |
+        if [ -z "$BUN_VERSION" ] && [ -f .bun-version ]; then echo "file=.bun-version" >> "$GITHUB_OUTPUT"; fi
+    - if: inputs.stack == 'bun'
+      uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      with:
+        bun-version: ${{ inputs.bun-version }}
+        bun-version-file: ${{ steps.bun-file.outputs.file }}
+    - if: inputs.stack == 'bun'
+      shell: bash
+      run: |
+        if [ -f package.json ]; then bun install --frozen-lockfile; else
+          echo "::notice::No package.json, dependencies not installed."; fi
+
+    - if: inputs.stack == 'go'
+      uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+      with:
+        go-version-file: go.mod
+    # local: build with the go.mod version setup-go installed, never a toolchain go.mod would download.
+    - if: inputs.stack == 'go'
+      shell: bash
+      run: |
+        echo "GOTOOLCHAIN=local" >> "$GITHUB_ENV"
+        GOTOOLCHAIN=local go mod download
