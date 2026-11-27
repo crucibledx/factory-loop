@@ -80,7 +80,8 @@ Secrets, set once:
 
 - `FACTORY_API_KEY`: org secret for public repos; repo secret for private repos on the GitHub Free plan.
 - `SMITH_CLIENT_ID` (variable, the app's client ID) and `SMITH_PRIVATE_KEY` (secret): the `crucible-smith` GitHub
-  App, used when a merged spec creates `loop:implement` issues in other repos. Set them on the repos that hold specs; for a private repo on
+  App, used when a merged spec creates `loop:implement` issues in other repos. Set them on the repos that hold specs,
+  and on this repo for `loop-review-retry` (see below); for a private repo on
   the GitHub Free plan (`hq`), they must be repo-level, since org variables and secrets don't reach it.
   `LOOP_GH_TOKEN` (fine-grained token, Issues read/write) still works as a fallback when the variable is not set.
 
@@ -97,6 +98,16 @@ dismissed on new pushes, resolved conversations, and the
 `review / review` check plus the repo's CI checks. The repo also needs "Allow auto-merge" turned on and the
 `SMITH_CLIENT_ID` variable and `SMITH_PRIVATE_KEY` secret. Without them the job skips with a notice. Private repos on the
 Free plan have no rulesets or auto-merge; merge those by hand.
+
+## Review at the usage limit
+
+The hosted review runs `droid exec` on the same Factory plan as the workstreams. When the plan's usage limit stops
+the reviewer, the `review / review` check stays red (the commit has no review), but the job reports it as a
+"Review usage limit" error with the reset time, not as a review failure. `loop-review-retry` runs in this repo every
+30 minutes as the `crucible-smith` app: it re-runs those review jobs in every repo the app is installed on, once the
+limit has reset, while the PR is open, not a draft, and still at the same commit. Re-run the job by hand to go sooner.
+It needs the `SMITH_CLIENT_ID` variable and `SMITH_PRIVATE_KEY` secret on this repo, and the app's installation needs
+Actions write, Checks read (to read the job's annotations) and Pull requests read.
 
 ## Use the plugin locally
 
