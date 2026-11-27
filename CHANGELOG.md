@@ -5,6 +5,10 @@
 - Reusable workflows pin every directly referenced third-party action to a release commit and version comment.
   Checkout v7.0.1, setup-bun v2.2.0, JUnit report v6.7.1, and create-github-app-token v3.4.0 run on Node 24;
   droid-action v14 is the current composite release. Workflow inputs and the `@v0` caller interface are unchanged.
+- The end-of-day summary (`loop-orchestrator`) has a "Problems" section: the day's problem reports from
+  `~/crucible-agents/.workstream/problems.jsonl`, fixed and open, grouped by kind. `scripts/problems.py` prints it,
+  checks each line against the format in hq `docs/workstream.md` and skips invalid ones. README step 7 follows the
+  rule that every problem is reported to Root, fixed or not.
 
 ## v0.6.0 — 2026-11-27
 
