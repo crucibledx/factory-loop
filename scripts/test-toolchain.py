@@ -206,11 +206,27 @@ check("the bun setup keeps the callers' version resolution: .bun-version only wh
       and "bun-version-file: ${{ steps.bun-file.outputs.file }}" in action)
 check("the bun install stays conditional on package.json",
       'if [ -f package.json ]; then bun install --frozen-lockfile; else' in action)
-check("go installs golangci-lint from the repo's make pin, only when the repo has one",
-      "make -s golangci-lint-version" in action
-      and "steps.golangci-version.outputs.version != ''" in action
+check("the install step consumes the version the step resolved, pinned and install-only",
+      "version: ${{ steps.golangci-version.outputs.version }}" in action
       and "golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a" in action
-      and "install-only: true" in action)
+      and "install-only: true" in action
+      and "steps.golangci-version.outputs.version != ''" in action)
+
+# The golangci version step's shell, run against real Makefiles.
+golangci_step = action.split("- id: golangci-version", 1)[1].split("\n    - ", 1)[0]
+golangci_shell = re.search(r"run: \|\n((?:        .+\n?)+)", golangci_step).group(1)
+def golangci_version(makefile):
+    path = repo({"Makefile": makefile})
+    out_file = os.path.join(path, "github_output")
+    proc = subprocess.run(["bash", "-c", golangci_shell], cwd=path, capture_output=True, text=True,
+                          env={"GITHUB_OUTPUT": out_file, "PATH": os.environ["PATH"]})
+    emitted = open(out_file).read() if os.path.exists(out_file) else ""
+    return proc.returncode, proc.stdout + proc.stderr, emitted
+code, out, emitted = golangci_version("golangci-lint-version:\n\t@echo v2.15.0\n")
+check("the golangci version step reads the repo's make pin", code == 0 and "version=v2.15.0" in emitted)
+code, out, emitted = golangci_version("all:\n\t@true\n")
+check("without the make target it skips with a notice and no version",
+      code == 0 and "::notice::" in out and "version=" not in emitted)
 
 # The ci / test gate's shell, run with the values the workflow passes it.
 gate = re.search(r"run: \|\n((?:          .+\n?)+)", jobs["test"]).group(1)
