@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- The end-of-day summary (`loop-orchestrator`) has a "Problems" section: the day's problem reports from
+  `~/crucible-agents/.workstream/problems.jsonl`, fixed and open, grouped by kind. `scripts/problems.py` prints it,
+  checks each line against the format in hq `docs/workstream.md` and skips invalid ones. README step 7 follows the
+  rule that every problem is reported to Root, fixed or not.
 - `loop-review` keeps PR code away from the write token (factory-loop#37). The new `reviewer` job runs collect, the
   `run_checks` installs and `droid exec` with read-only permissions, and uploads `result.json` as an artifact. The
   `review` job (still the required `review / review` check) needs it, holds the write token, and checks out only
