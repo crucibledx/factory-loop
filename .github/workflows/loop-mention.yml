@@ -41,6 +41,9 @@ jobs:
       - uses: ./.factory-loop/.github/actions/setup-toolchain
         with:
           stack: ${{ steps.toolchain.outputs.stack }}
+      - name: Remove the factory-loop checkout
+        # The repo's checks (a tree-wide prettier, for one) must not see factory-loop's files.
+        run: rm -rf .factory-loop
       - uses: Factory-AI/droid-action@035954f0d86a72304d87a75a8625aa34699e1274 # v14
         with:
           factory_api_key: ${{ secrets.FACTORY_API_KEY }}

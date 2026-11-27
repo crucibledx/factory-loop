@@ -288,5 +288,10 @@ implement = open(os.path.join(ROOT, ".github", "workflows", "loop-implement.yml"
 check("setup_bun stays as a deprecated input that gates only the bun stack",
       "setup_bun:" in implement and "Deprecated." in implement
       and "steps.toolchain.outputs.stack != 'bun' || inputs.setup_bun" in implement)
+ci_wf = open(os.path.join(ROOT, ".github", "workflows", "loop-ci.yml"), encoding="utf-8").read()
+check("every job that runs repo commands removes the .factory-loop checkout first",
+      ci_wf.count("run: rm -rf .factory-loop") == 3
+      and all("run: rm -rf .factory-loop" in open(os.path.join(ROOT, ".github", "workflows", n), encoding="utf-8").read()
+              for n in ("loop-mention.yml", "loop-implement.yml")))
 
 sys.exit(1 if failures else 0)

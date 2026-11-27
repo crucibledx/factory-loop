@@ -534,6 +534,10 @@ check("the artifact is downloaded before factory-loop is checked out",
 check("the reviewer job sets up the resolved toolchain without lifecycle scripts, never the Bun-only steps",
       "setup-bun" not in reviewer_job and "uses: ./.factory-loop/.github/actions/setup-toolchain" in reviewer_job
       and 'ignore-scripts: "true"' in reviewer_job)
+check("the .factory-loop checkout leaves the workspace before the reviewer runs the repo's checks",
+      'run: mv .factory-loop "$RUNNER_TEMP/factory-loop"' in reviewer_job
+      and reviewer_job.index("mv .factory-loop") < reviewer_job.index("- name: Review")
+      and 'python3 "$RUNNER_TEMP/factory-loop/review/usage_limit.py"' in reviewer_job)
 
 os.environ.pop("LOOP_REVIEW_PROMPT", None)
 default_prompt = lr.render_prompt("full", run_checks=False)
