@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.6.0 — 2026-11-27
 
 - `engineering-standards` holds Go to the same structure bar as TypeScript (implement and review stages): a
   domain-driven layout (context packages without I/O, thin adapters, imports pointing inward), soft size limits for
@@ -15,13 +15,15 @@
   `.bun-version`, else `package.json`) and the dependencies, without lifecycle scripts, when the repo has `bun.lock`;
   `actionlint` (checksum-verified) when the loop contract lists it. A failed install does not block the review, and
   the reviewer is told. This runs PR code in a job with `FACTORY_API_KEY` and a write token, so turn it on only where
-  every PR author is trusted. Without it, the prompt now tells the reviewer not to run any repository code. Both checkouts move to `actions/checkout` v7.0.1 (Node 24), and every action in the job
-  is pinned to a commit SHA.
+  every PR author is trusted. Without it, the prompt now tells the reviewer not to run any repository code. Both
+  checkouts move to `actions/checkout` v7.0.1 (Node 24), and every action in the job is pinned to a commit SHA.
 - When the Factory usage limit stops the reviewer (`droid exec` 402), `loop-review` reports a "Review usage limit"
   error with the reset time instead of an unexplained failure. A new scheduled workflow in this repo,
   `loop-review-retry`, re-runs those review jobs (only the review job) across the org as the `crucible-smith` app
   once the limit has reset, so the PR gets its review without a manual re-run. The app's installation needs Actions
   write, Checks read and Pull requests read, and this repo needs `SMITH_CLIENT_ID` and `SMITH_PRIVATE_KEY`.
+- README's multiplayer Slack caption follows the bridge's order: check, route, record, deliver to the workstream's
+  relay, and only then acknowledge in the thread, with prefix routing ahead of the thread claim and the channel.
 
 ## v0.5.1 — 2026-11-26
 
