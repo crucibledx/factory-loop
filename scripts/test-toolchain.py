@@ -275,6 +275,8 @@ check("a failed toolchain install is still noted, never fatal",
 check("under ignore-scripts the go pin's Makefile never runs, so review setup executes no PR code",
       "if: inputs.stack == 'go' && inputs.ignore-scripts != 'true'" in action
       and "ignore-scripts: skipping the Makefile" in action)
+check("no plain-scalar run value carries ::, which breaks YAML (actionlint does not lint composite actions)",
+      'run: echo "::' not in action)
 for name in ("loop-mention.yml", "loop-implement.yml"):
     wf = open(os.path.join(ROOT, ".github", "workflows", name), encoding="utf-8").read()
     check(f"{name} sets up the resolved toolchain from factory-loop at loop_ref, not always Bun",

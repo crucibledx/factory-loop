@@ -58,7 +58,8 @@ runs:
     # ignore-scripts the checkout is untrusted, so its Makefile never runs and golangci-lint is not installed.
     - if: inputs.stack == 'go' && inputs.ignore-scripts == 'true'
       shell: bash
-      run: echo "::notice::ignore-scripts: skipping the Makefile's golangci-lint pin; golangci-lint not installed."
+      run: |
+        echo "::notice::ignore-scripts: skipping the Makefile's golangci-lint pin; golangci-lint not installed."
     - id: golangci-version
       if: inputs.stack == 'go' && inputs.ignore-scripts != 'true'
       shell: bash
