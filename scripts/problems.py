@@ -5,8 +5,9 @@ Reads the workstream problem reports (`problems.jsonl`, one JSON object per line
 `docs/workstream.md`, "Problem reports") and prints one Slack line per kind with that day's problems, fixed and
 unfixed. A problem is (ws, kind, name); its latest line up to the end of the day is its state, so a problem reported
 earlier and fixed today shows as fixed. Every line is untrusted data: a line that does not match the format is skipped
-with a warning on stderr that names only the line number, and text is escaped for Slack. A missing or empty file
-prints nothing and exits 0, so the summary leaves the section out; a file that cannot be read exits 1.
+with a warning on stderr that names only the line number, and text is escaped for Slack. A line nested more than 32
+levels deep is skipped too, on every Python version. A missing or empty file prints nothing and exits 0, so the
+summary leaves the section out; a file that cannot be read exits 1.
 
 Usage: problems.py [path] [YYYY-MM-DD]
 Defaults: ~/crucible-agents/.workstream/problems.jsonl, today in local time.
@@ -34,6 +35,41 @@ SECRET = re.compile(
     r"|(secret|token|password|passwd|api[_-]?key)[\"']?\s*[=:]\s*[\"']?(?=[^\s\"']*[0-9])[^\s\"']{16,}",
     re.IGNORECASE)
 SLACK_SAFE_LINK = re.compile(r"[^<>|]+")
+# Reports are flat objects. Deeper lines are skipped before parsing, so the result does not depend on the Python
+# version: json raises RecursionError on deep input in 3.9 but parses it in 3.12.
+MAX_DEPTH = 32
+
+
+def too_deep(text):
+    """Whether JSON text nests arrays and objects deeper than MAX_DEPTH, ignoring brackets inside strings."""
+    depth, in_string, escaped = 0, False, False
+    for ch in text:
+        if in_string:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == '"':
+                in_string = False
+        elif ch == '"':
+            in_string = True
+        elif ch in "[{":
+            depth += 1
+            if depth > MAX_DEPTH:
+                return True
+        elif ch in "]}":
+            depth = max(depth - 1, 0)
+    return False
+
+
+def parse_int(digits):
+    """int() with the 4300-digit limit of Python 3.11+ on every version; 3.9 has none and is slow on long numbers.
+
+    json passes the sign too; like Python's limit, this counts only the digits.
+    """
+    if len(digits.lstrip("-")) > 4300:
+        raise ValueError("integer too long")
+    return int(digits)
 
 
 def at_time(entry):
@@ -83,10 +119,17 @@ def load_entries(path, warn=None):
         if not raw.strip():
             continue
         try:
-            entry = json.loads(raw.decode("utf-8"))
-        except (ValueError, RecursionError):
-            entry = None
-        reason = "not a JSON object" if not isinstance(entry, dict) else invalid_reason(entry)
+            text = raw.decode("utf-8")
+        except ValueError:
+            text = ""
+        if too_deep(text):
+            reason = "nested too deep"
+        else:
+            try:
+                entry = json.loads(text, parse_int=parse_int)
+            except ValueError:
+                entry = None
+            reason = "not a JSON object" if not isinstance(entry, dict) else invalid_reason(entry)
         if reason:
             if warn:
                 warn(f"{path}:{lineno}: {reason}, line skipped")
