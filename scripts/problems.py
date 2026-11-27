@@ -25,7 +25,14 @@ LIMITS = {"name": 100, "summary": 500, "fix": 500}
 AT = re.compile(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ")
 AGENT = re.compile(r"[A-Za-z0-9-]{1,64}")
 LINK = re.compile(r"https://\S{1,492}")
-UNSAFE = re.compile(r"[\x00-\x1f\x7f-\x9f\u2028\u2029]")
+# Lone surrogates too: json.loads accepts an escaped one, and printing it fails.
+UNSAFE = re.compile(r"[\x00-\x1f\x7f-\x9f\u2028\u2029\ud800-\udfff]")
+# SECRET_RE of report-problem.sh: the format allows no credentials in any field, and the summary would post them.
+SECRET = re.compile(
+    r"\b(gh[pousr]_[a-z0-9]{20,}|github_pat_[a-z0-9_]{20,}|xox[abeprs]-[a-z0-9-]{10,}|sk-[a-z0-9_-]{20,}|akia[0-9a-z]{16})"
+    r"|-----begin [a-z ]*private key|\bbearer [a-z0-9._~+/=-]{16,}|hooks\.slack\.com/services/"
+    r"|(secret|token|password|passwd|api[_-]?key)[\"']?\s*[=:]\s*[\"']?(?=[^\s\"']*[0-9])[^\s\"']{16,}",
+    re.IGNORECASE)
 SLACK_SAFE_LINK = re.compile(r"[^<>|]+")
 
 
@@ -56,6 +63,9 @@ def invalid_reason(entry):
     link = entry.get("link")
     if link is not None and not (isinstance(link, str) and LINK.fullmatch(link) and not UNSAFE.search(link)):
         return "bad link"
+    for field in ("agent", "name", "summary", "fix", "link"):
+        if isinstance(entry.get(field), str) and SECRET.search(entry[field]):
+            return f"credential-like {field}"
     return None
 
 
@@ -74,7 +84,7 @@ def load_entries(path, warn=None):
             continue
         try:
             entry = json.loads(raw.decode("utf-8"))
-        except ValueError:
+        except (ValueError, RecursionError):
             entry = None
         reason = "not a JSON object" if not isinstance(entry, dict) else invalid_reason(entry)
         if reason:

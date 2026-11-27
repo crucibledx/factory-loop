@@ -51,6 +51,13 @@ check("a missing required field is rejected", pr.invalid_reason(missing) == "bad
 nolink = problem()
 del nolink["link"]
 check("a missing link reads as none", pr.invalid_reason(nolink) is None)
+TOKEN = "gh" + "p_" + "a" * 36  # built at runtime so no token-shaped literal is committed
+for field, value in [("name", TOKEN), ("summary", "Bearer " + "x" * 20), ("fix", "api_key=abc123def456ghi789"),
+                     ("link", "https://hooks.slack" + ".com/services/T0/B0/x"), ("agent", "xox" + "b-1234567890-ab")]:
+    check(f"a credential-like {field} is rejected", pr.invalid_reason({**problem(), field: value}) == f"credential-like {field}")
+check("text that only mentions a token is valid", pr.invalid_reason(problem(summary="token: expired, re-ran gh auth")) is None)
+for field, value in [("name", "a\ud800b"), ("link", "https://x\udc00")]:
+    check(f"a lone surrogate in {field} is rejected", pr.invalid_reason({**problem(), field: value}) == f"bad {field}")
 check("a whitespace-only text field is valid, as the writer allows it", pr.invalid_reason(problem(fix=" ")) is None)
 
 entries = [
@@ -111,6 +118,19 @@ with tempfile.TemporaryDirectory() as tmp:
     check("CLI prints the day's lines", r.returncode == 0 and r.stdout ==
           "• *tool* (1): <https://github.com/crucibledx/assets/pull/14|timeout> (other, fixed)\n"
           and "SECRET" not in r.stderr)
+    hostile = os.path.join(tmp, "hostile.jsonl")
+    valid = json.dumps(problem(name="first")) + "\n"
+    with open(hostile, "w", encoding="utf-8") as fh:
+        fh.write(valid + "[" * 5000 + "]" * 5000 + "\n"
+                 + json.dumps(problem(name="x"))[:-1] + ', "deep": ' + "[" * 5000 + "]" * 5000 + "}\n"
+                 + json.dumps(problem(name="x")).replace('"x"', '"a\\ud800"') + "\n"
+                 + json.dumps(problem(name="y", link="https://x")).replace('https://x', 'https://x\\udc00') + "\n"
+                 + json.dumps(problem(name=TOKEN)) + "\n"
+                 + json.dumps(problem(name="last")) + "\n")
+    r = run(hostile, "2026-11-26")
+    check("deep nesting, lone surrogates and credentials skip only their lines", r.returncode == 0
+          and r.stdout == "• *tool* (2): first (other, fixed), last (other, fixed)\n"
+          and r.stderr.count("line skipped") == 5 and TOKEN not in r.stderr + r.stdout and "ud800" not in r.stderr)
     r = run(os.path.join(tmp, "nope"))
     check("a missing file exits 0 with no output", r.returncode == 0 and r.stdout == "")
     r = run(tmp)
