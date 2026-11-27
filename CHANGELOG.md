@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- `implement-spec`: after pushing to a draft PR, poll `gh pr view --json headRefOid` until it shows the pushed
+  commit (every few seconds, give up with a clear error after about 60 seconds) before `gh pr ready`. GitHub lags
+  after a push; marking ready against a stale head ran the review on the wrong commit.
+
 - `loop-review`: a follow-up review after the PR merged its base branch reviews only the PR's own changes since the
   last review, not the base's commits that the merge brought in (factory-loop#33). It compares the head with the
   reviewed commit merged with the same base commit (`git merge-tree --write-tree`, git 2.38 or later). When that

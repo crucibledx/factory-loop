@@ -30,7 +30,10 @@ clear escalation. You own the PR until one of those two states; do not stop earl
 
 ## PR loop (after the PR is open)
 
-Open the PR as draft first so the hosted review runs once on a complete change, then mark it ready. Then repeat:
+Open the PR as draft first so the hosted review runs once on a complete change, then mark it ready. GitHub lags after
+a push: before `gh pr ready`, poll `gh pr view <n> --json headRefOid` every few seconds until it shows the commit you
+just pushed; give up with a clear error after about 60 seconds and retry later. Marking ready against a stale head
+runs the review on the wrong commit. Then repeat:
 
 1. **Wait** for every check on the head commit, including `review`: `gh pr checks <n> --watch`. Never act on results
    from an older commit.
