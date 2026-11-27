@@ -61,6 +61,13 @@ def fake_request(method, path, body=None):
         if state.pop("runs_error", False):
             raise RuntimeError("GET runs -> 502")
         return {"workflow_runs": state["runs"]}
+    if method == "GET" and path.startswith("/repos/o/r/actions/runs/") and "/jobs?filter=latest" in path:
+        if state.get("jobs_error"):
+            raise RuntimeError("GET jobs -> 403")
+        run_jobs = state.get("jobs", [])
+        return {"jobs": run_jobs.get(int(path.split("/")[6]), []) if isinstance(run_jobs, dict) else run_jobs}
+    if method == "GET" and path.startswith("/repos/o/r/check-runs/") and "/annotations" in path:
+        return state.get("notes", {}).get(int(path.split("/")[5]), [])
     if state["reject_inline"] and path.endswith("/reviews") and body and body.get("comments"):
         raise RuntimeError("POST reviews -> 422: line not in diff")
     if state["reject_inline"] and path.endswith("/pulls/7/comments"):
@@ -139,6 +146,79 @@ check("a failed lookup mid-wait does not end the wait",
       gate_while(running, error_on=1, review_after=3) == 0 and clock["sleeps"] == 3)
 check("gate stops waiting at the deadline",
       gate_while(running) == 1 and clock["sleeps"] == lr.REVIEW_WAIT_SECONDS // lr.REVIEW_POLL_SECONDS)
+
+# forge-cli#90 (38cba12): the gate waited for the head's review run, which then stopped at the usage limit.
+LIMIT_NOTE = [{"title": "Review usage limit", "message": "The Factory usage limit stopped the reviewer, so this commit "
+               "has no review yet. This is not a review verdict. The limit resets at 2026-11-27T04:50Z. The scheduled "
+               "review retry re-runs this job after the reset; re-run it by hand to go sooner."}]
+SPLIT_JOBS = [{"id": 31, "name": "review / review", "conclusion": "failure"},
+              {"id": 30, "name": "review / reviewer", "conclusion": "failure"}]
+URL = "https://github.com/o/r/actions/runs/100"
+stopped = [{"id": 100, "status": "completed", "conclusion": "failure", "html_url": URL},
+           {"id": 200, "status": "in_progress"}]
+
+
+def gate_output(runs, **events):
+    out = io.StringIO()
+    with redirect_stdout(out):
+        code = gate_while(runs, **events)
+    return code, out.getvalue()
+
+
+def finish_stopped(seconds):
+    fake_sleep(seconds)
+    if clock["sleeps"] == 1:
+        state["runs"] = stopped
+
+
+state.update({"jobs": SPLIT_JOBS, "notes": {30: LIMIT_NOTE, 31: [{"title": "No review", "message": "x"}]}})
+lr.time = types.SimpleNamespace(monotonic=lambda: clock["now"], sleep=finish_stopped)
+code, out = gate_output(running)
+lr.time = types.SimpleNamespace(monotonic=lambda: clock["now"], sleep=fake_sleep)
+check("a gate whose awaited review run stops at the usage limit says so, with the reset, and fails",
+      code == 1 and clock["sleeps"] == 1
+      and "Review stopped at the usage limit; it re-runs after 2026-11-27T04:50Z." in out and URL in out
+      and "No completed review" not in out)
+state["jobs"] = [{"id": 30, "name": "review / review", "conclusion": "failure"}]
+code, out = gate_output(stopped)
+check("the same for a review run from before the split (the stop is on the review job)",
+      code == 1 and "Review stopped at the usage limit; it re-runs after 2026-11-27T04:50Z." in out)
+state["notes"] = {30: [{"title": "Review usage limit", "message": "The reset time was not reported."}]}
+code, out = gate_output(stopped)
+check("a usage-limit stop without a reset time still says so", code == 1
+      and "Review stopped at the usage limit; it re-runs after the reset (the reset time was not reported)." in out)
+state["notes"] = {30: [{"title": "", "message": "Process completed with exit code 1."}]}
+code, out = gate_output(stopped)
+check("a review run that failed otherwise is named, with its run and the job to re-run, and the gate fails",
+      code == 1 and "its review run ended as failure without posting one" in out and URL in out
+      and "`review / reviewer` job" in out and "usage limit" not in out)
+state["jobs_error"] = True
+code, out = gate_output(stopped)
+check("a failed lookup of why the review stopped keeps the plain message and fails",
+      code == 1 and "No completed review for abcdef1 yet." in out and "cannot look up why" in out)
+state["jobs_error"] = False
+state["notes"] = {30: LIMIT_NOTE}
+code, out = gate_output([{"id": 200, "status": "in_progress"}])
+check("with no review run of the head at all, the plain message stays", code == 1 and "No completed review" in out)
+state["runs"], state["reviews"] = stopped, REVIEWED
+check("a review that lands after a usage-limit stop (the retry) passes the gate", exit_code(lr.gate) == 0)
+state["reviews"] = []
+code, out = gate_output([{**stopped[0], "run_attempt": 10}, stopped[1]])
+check("a stop past the retry's attempt cap says to re-run it by hand", code == 1
+      and "after 10 attempts, so it is not re-run again" in out and "`review / reviewer`" in out)
+# The API lists runs in any order; the newest one (highest id) is the head's latest review.
+OTHER = {"id": 150, "status": "completed", "conclusion": "failure", "html_url": URL.replace("100", "150")}
+state.update({"jobs": {100: [{"id": 30, "name": "review / reviewer", "conclusion": "failure"}],
+                       150: [{"id": 32, "name": "review / reviewer", "conclusion": "failure"}]},
+              "notes": {30: LIMIT_NOTE, 32: [{"title": "", "message": "Process completed with exit code 1."}]}})
+code, out = gate_output([stopped[0], OTHER, stopped[1]])
+check("the newest review run decides: a later plain failure after a usage-limit stop",
+      code == 1 and "ended as failure" in out and "runs/150" in out and "usage limit" not in out)
+state["notes"] = {30: [{"title": "", "message": "Process completed with exit code 1."}], 32: LIMIT_NOTE}
+code, out = gate_output([OTHER, stopped[0], stopped[1]])
+check("the newest review run decides: a later usage-limit stop after a plain failure",
+      code == 1 and "Review stopped at the usage limit" in out and "runs/150" in out)
+state.update({"jobs": [], "notes": {}})
 del os.environ["GITHUB_RUN_ID"]
 state["reviews"] = REVIEWED
 

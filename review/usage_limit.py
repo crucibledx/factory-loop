@@ -96,17 +96,22 @@ def stopped_at_limit(repo, job_id):
     return False, None
 
 
-def retry_run(repo, run, now):
-    """Re-run the review job of run that the usage limit stopped, if any. Returns a log line or None."""
-    jobs = paged(f"/repos/{repo}/actions/runs/{run['id']}/jobs?filter=latest", "jobs")
+def limit_stop(repo, run_id):
+    """(job, reset) for the review job of the run's latest attempt that `note` marked as a usage-limit stop, else
+    (None, None)."""
+    jobs = paged(f"/repos/{repo}/actions/runs/{run_id}/jobs?filter=latest", "jobs")
     failed = [j for j in jobs if j["name"].split(" / ")[-1] in REVIEW_JOBS and j["conclusion"] == "failure"]
     failed.sort(key=lambda j: REVIEW_JOBS.index(j["name"].split(" / ")[-1]))
-    review, reset = None, None
     for job in failed:
         stopped, reset = stopped_at_limit(repo, job["id"])
         if stopped:
-            review = job
-            break
+            return job, reset
+    return None, None
+
+
+def retry_run(repo, run, now):
+    """Re-run the review job of run that the usage limit stopped, if any. Returns a log line or None."""
+    review, reset = limit_stop(repo, run["id"])
     if not review:
         return None
     where = f"{repo} run {run['id']} ({run['head_sha'][:7]})"

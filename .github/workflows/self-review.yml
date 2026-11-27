@@ -11,6 +11,7 @@ permissions:
   contents: write
   pull-requests: write
   actions: read
+  checks: read
 
 jobs:
   # Drafts are skipped here so they never report a skipped `review / review` (see templates/repo crucible-loop.yml).

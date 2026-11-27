@@ -449,12 +449,51 @@ def reviewed(head):
     return bool(marker and head.startswith(marker["sha"]))
 
 
-def review_run_active(workflow_id, head):
-    """True while another pull_request run of this workflow on head is unfinished."""
+def review_runs(workflow_id, head):
+    """The other pull_request runs of this workflow on head, newest first."""
     runs = request("GET", f"/repos/{env('REPO')}/actions/workflows/{workflow_id}/runs"
                           f"?event=pull_request&head_sha={head}&per_page=100")
     own = os.environ.get("GITHUB_RUN_ID")
-    return any(r["status"] != "completed" and str(r["id"]) != own for r in runs.get("workflow_runs", []))
+    others = [r for r in runs.get("workflow_runs", []) if str(r["id"]) != own]
+    return sorted(others, key=lambda r: r["id"], reverse=True)
+
+
+def review_run_active(workflow_id, head):
+    """True while another pull_request run of this workflow on head is unfinished."""
+    return any(r["status"] != "completed" for r in review_runs(workflow_id, head))
+
+
+def own_workflow_id():
+    return request("GET", f"/repos/{env('REPO')}/actions/runs/{os.environ['GITHUB_RUN_ID']}")["workflow_id"]
+
+
+def no_review_reason(head):
+    """Why head has no completed review, for the gate's failure. Says so when its review run stopped at the usage
+    limit, which loop-review-retry re-runs after the reset, so the red gate does not read as a problem with the PR."""
+    default = f"No completed review for {head[:7]} yet. The review run for this commit sets this check."
+    if not os.environ.get("GITHUB_RUN_ID"):
+        return default
+    try:
+        # Imported here: usage_limit imports this module.
+        from usage_limit import MAX_ATTEMPTS, fmt, limit_stop
+        latest = next(iter(review_runs(own_workflow_id(), head)), None)
+        if not latest or latest["status"] != "completed":
+            return default
+        job, reset = limit_stop(env("REPO"), latest["id"])
+    except (ImportError, RuntimeError, KeyError, TypeError, ValueError) as err:
+        print(f"cannot look up why the review run stopped: {err!r}"[:300])
+        return default
+    where = latest.get("html_url") or f"run {latest['id']}"
+    by_hand = "Re-run that run's `review / reviewer` job (or its failed jobs)."
+    if job:
+        if latest.get("run_attempt", 1) >= MAX_ATTEMPTS:
+            return (f"Review stopped at the usage limit after {MAX_ATTEMPTS} attempts, so it is not re-run again "
+                    f"({where}). {by_hand} This is not a review verdict.")
+        when = f"after {fmt(reset)}" if reset else "after the reset (the reset time was not reported)"
+        return (f"Review stopped at the usage limit; it re-runs {when}. {head[:7]} has no review yet, so this check "
+                f"stays red until that review sets it ({where}). This is not a review verdict.")
+    return (f"No completed review for {head[:7]}: its review run ended as {latest.get('conclusion') or 'unknown'} "
+            f"without posting one ({where}). {by_hand}")
 
 
 def wait_for_review(head):
@@ -470,7 +509,7 @@ def wait_for_review(head):
     if not run_id:
         return False
     try:
-        workflow_id = request("GET", f"/repos/{env('REPO')}/actions/runs/{run_id}")["workflow_id"]
+        workflow_id = own_workflow_id()
         active = review_run_active(workflow_id, head)
     except RuntimeError as err:
         print(f"cannot look up review runs: {err}")
@@ -495,7 +534,8 @@ def gate():
     blocking = blocking_severities()
     head = head_sha()
     if not wait_for_review(head):
-        report(f"No completed review for {head[:7]} yet. The review run for this commit sets this check.")
+        # Never pass or skip without a review: a skipped or green gate counts as passed for rulesets and automerge.
+        report(no_review_reason(head))
         sys.exit(1)
     open_blocking = [t for t in threads() if not t["resolved"] and t["severity"] in blocking]
     lines = [f"Unresolved blocking review threads ({'/'.join(blocking)}): {len(open_blocking)}"]

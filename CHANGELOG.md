@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- `loop-review`: when the head's review run stopped at the Factory usage limit, a gate-only run (a submitted review
+  or a thread reply) says "Review stopped at the usage limit; it re-runs after <reset>" with a link to that run,
+  instead of "No completed review" (factory-loop#52). When the review run ended otherwise without a review, the gate
+  names its conclusion and links it. The gate still fails until a review sets the check. The `review` job now asks
+  for `checks: read` to read the stop's annotation; the caller template already grants it, and this repo's
+  self-review now does too. A caller without it fails to start, so add `checks: read` to its `permissions`.
 - `scripts/problems.py` skips a report line nested more than 32 levels deep before parsing it, so it gives the same
   result on every Python version. Before, it relied on json's `RecursionError`, which Python 3.9 raises on deep input
   but 3.12 does not, so a deeply nested line was skipped on 3.9 and read on 3.12, and `test-problems.py` failed on

@@ -184,6 +184,7 @@ jobs:
       contents: write # resolveReviewThread is refused to the Actions token without it
       pull-requests: write
       actions: read # find a review run of the same commit that is still in progress
+      checks: read # read the usage-limit annotation of a review run that stopped without a review
     env:
       GH_TOKEN: ${{ github.token }}
       REPO: ${{ github.repository }}
