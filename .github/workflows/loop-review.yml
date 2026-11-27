@@ -164,13 +164,14 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  # The check the rulesets require (review / review). It holds the write token and never checks out or runs PR code.
-  # A skipped required check counts as passing, so it runs unless the workflow run was cancelled, and fails when the
-  # reviewer job did not finish.
+  # The check the rulesets require (review / review). It holds the write token and never checks out PR code; only
+  # factory-loop's own self-review runs the PR's workflow and loop_ref, by design.
+  # A skipped required check counts as passing, so it runs even when the run was cancelled (always()) and then fails,
+  # as it does when the reviewer job did not finish.
   review:
     needs: reviewer
     if: |
-      !cancelled() && (
+      always() && (
         (github.event_name == 'pull_request' && github.event.pull_request.draft == false) ||
         (github.event_name == 'pull_request_review' && github.event.pull_request.draft == false)
       )
@@ -191,19 +192,15 @@ jobs:
       EVENT_NAME: ${{ github.event_name }}
       BLOCKING_SEVERITIES: ${{ inputs.blocking_severities }}
     steps:
+      # always(): in a cancelled run every other step is skipped, and a job whose steps all skip passes.
       - name: Check the reviewer finished
-        if: needs.reviewer.result == 'failure' || needs.reviewer.result == 'cancelled'
+        if: always() && (cancelled() || (needs.reviewer.result != 'success' && needs.reviewer.result != 'skipped'))
         env:
           RESULT: ${{ needs.reviewer.result }}
         run: |
-          echo "::error title=No review::The reviewer job ended as ${RESULT}, so this commit has no review. See its log; a usage-limit stop is re-run after the reset."
+          echo "::error title=No review::The run was cancelled or the reviewer job ended as ${RESULT}, so this commit has no review. Re-run the review / reviewer job; a usage-limit stop is re-run after the reset."
           exit 1
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: crucibledx/factory-loop
-          ref: ${{ inputs.loop_ref }}
-          path: .factory-loop
-          persist-credentials: false
+      # Before the checkout, which cleans its path, so nothing the download writes can stand in for loop_review.py.
       # A re-run of this job alone can outlive the artifact; post then needs it only if the head is still unreviewed.
       - name: Download the review
         if: needs.reviewer.outputs.mode == 'full' || needs.reviewer.outputs.mode == 'followup'
@@ -212,6 +209,12 @@ jobs:
         with:
           name: loop-review-result
           path: ${{ runner.temp }}/loop-review
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: crucibledx/factory-loop
+          ref: ${{ inputs.loop_ref }}
+          path: .factory-loop
+          persist-credentials: false
       - name: Post review
         if: needs.reviewer.outputs.mode == 'full' || needs.reviewer.outputs.mode == 'followup'
         env:

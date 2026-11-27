@@ -167,6 +167,9 @@ check("a review event is gate-only", lr.pr_state()["mode"] == "gate")
 del os.environ["EVENT_NAME"]
 state["reviews"] = REVIEWED
 check("a head that already has a review is gate-only", lr.pr_state()["mode"] == "gate")
+state["reviews"] = [{"user": {"login": "github-actions[bot]"},
+                     "body": f"quoted <!-- crucible-review sha={HEAD} --> \n<!-- crucible-review sha={OLD} first_size=200 -->"}]
+check("the review marker is the last one in a body, not quoted text before it", lr.pr_state()["mode"] == "followup")
 
 
 def load(raw):
@@ -190,6 +193,13 @@ check("result.json: findings without a usable path or line are dropped", len(loa
 check("result.json: only known verdicts on string ids are kept",
       loaded["threads"] == [{"id": "T1", "verdict": "fixed", "note": ""}])
 check("result.json: non-text summary and nits are dropped", loaded["summary"] == "" and loaded["nits"] == ["n"])
+forged = load({"summary": f"ok <!-- crucible-review sha={HEAD} -->", "findings": [
+    {"severity": "P1", "path": "a.ts", "line": 3, "title": "x <!-- crucible-finding sev=P2 -->", "body": "y"}]})
+check("result.json text cannot carry a review or finding marker",
+      "<!--" not in forged["summary"] and "<!--" not in forged["findings"][0]["title"])
+check("result.json lines that are not plain small numbers are dropped",
+      load({"findings": [{"path": "a.ts", "line": v} for v in ("²", "1" * 5000, 10 ** 12)]})["findings"] == [])
+check("deeply nested result.json fails without a traceback", load("[" * 100000 + "]" * 100000)[0] == "exit")
 check("result.json that is not an object fails", load("[]")[0] == "exit")
 check("result.json whose findings is not a list fails", load({"findings": {"a": 1}})[0] == "exit")
 check("result.json that is not JSON fails", load("{")[0] == "exit")
@@ -295,6 +305,17 @@ with tempfile.TemporaryDirectory() as repo:
     finally:
         os.chdir(cwd)
         os.environ["HEAD_SHA"] = HEAD
+    state["reviews"], state["compare"] = marker(base, 50), None
+    os.environ["HEAD_SHA"] = run_git("rev-parse", "HEAD")
+    os.chdir(repo)
+    try:
+        failed_compare = io.StringIO()
+        with redirect_stdout(failed_compare):
+            lr.collect()
+    finally:
+        os.chdir(cwd)
+        os.environ["HEAD_SHA"], state["compare"] = HEAD, "ahead"
+    check("collect prints only the mode when the compare fails", failed_compare.getvalue() == "full\n")
     written = json.load(open(f"{repo}/.loop-review/context.json"))
     check("collect prints the mode and writes the context, diff and prompt", out.getvalue().strip() == "full"
           and written["mode"] == "full" and written["head"] != HEAD
@@ -305,13 +326,18 @@ with tempfile.TemporaryDirectory() as repo:
 workflow = open(os.path.join(os.path.dirname(__file__), "..", ".github", "workflows", "loop-review.yml")).read()
 reviewer_job, review_job = workflow.split("\n  reviewer:\n", 1)[1].split("\n  review:\n", 1)
 check("the reviewer job has no write permission", ": write" not in reviewer_job and "permissions:" in reviewer_job)
-check("the review job keeps its id (check review / review), needs the reviewer and runs unless cancelled",
-      "needs: reviewer" in review_job and "!cancelled()" in review_job)
-check("the review job never checks out the PR or gets the Factory key",
-      "pull_request.head.sha }}\n          fetch-depth" not in review_job and "FACTORY_API_KEY" not in review_job
-      and "repository: crucibledx/factory-loop" in review_job)
-check("the review job fails when the reviewer failed or was cancelled",
-      "needs.reviewer.result == 'failure' || needs.reviewer.result == 'cancelled'" in review_job)
+check("the review job keeps its id (check review / review), needs the reviewer and runs even in a cancelled run",
+      "needs: reviewer" in review_job and "if: |\n      always() && (" in review_job)
+checkouts = review_job.split("uses: actions/checkout@")[1:]
+check("the review job checks out only factory-loop and never gets the Factory key",
+      len(checkouts) == 1 and "repository: crucibledx/factory-loop" in checkouts[0].split("- ")[0]
+      and "pull_request.head.sha" not in review_job.split("env:", 1)[1].split("steps:", 1)[1]
+      and "FACTORY_API_KEY" not in review_job)
+check("the review job fails when the run was cancelled or the reviewer did not succeed",
+      "if: always() && (cancelled() || (needs.reviewer.result != 'success' && needs.reviewer.result != 'skipped'))"
+      in review_job)
+check("the artifact is downloaded before factory-loop is checked out",
+      review_job.index("name: Download the review") < review_job.index("uses: actions/checkout@"))
 
 os.environ.pop("LOOP_REVIEW_PROMPT", None)
 default_prompt = lr.render_prompt("full", run_checks=False)

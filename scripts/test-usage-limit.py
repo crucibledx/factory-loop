@@ -111,6 +111,9 @@ RUNS["o/live"] += [run(12), run(13)]
 # run 14 has the split jobs: the reviewer stopped at the limit, and the gate that needs it failed after it
 JOBS[14] = ("failure", PAST_LIMIT)
 RUNS["o/live"].append(run(14))
+# run 15 has the split jobs, but its reviewer failed for another reason: neither job is re-run
+JOBS[15] = ("failure", GATE_FAIL)
+RUNS["o/live"].append(run(15))
 FILLER_JOBS = [{"id": 900 + i, "name": f"build / shard {i}", "conclusion": "success"} for i in range(100)]
 FILLER_NOTES = [{"title": "", "message": f"warning {i}"} for i in range(100)]
 calls = []
@@ -136,7 +139,7 @@ def fake_request(method, path, body=None):
                 {"id": 200 + rid, "name": "review / review", "conclusion": JOBS[rid][0]}]
         if rid == 12:
             return {"jobs": FILLER_JOBS if page == 1 else jobs}
-        if rid == 14:
+        if rid in (14, 15):
             return {"jobs": [{"id": 400 + rid, "name": "review / review", "conclusion": "failure"},
                              {"id": 200 + rid, "name": "review / reviewer", "conclusion": "failure"}]}
         return {"jobs": jobs}
@@ -166,6 +169,9 @@ check("a review job or usage-limit annotation on a later page is found", 12 in r
 check("in a split run the stopped reviewer job is re-run, not the gate that needs it",
       ("POST", "/repos/o/live/actions/jobs/214/rerun") in calls
       and not any("/414/" in p for _, p in calls))
+check("in a split run whose reviewer failed for another reason, neither job is re-run",
+      ("GET", "/repos/o/live/check-runs/215/annotations?per_page=100&page=1") in calls
+      and not any(m == "POST" and ("/215/" in p or "/415/" in p) for m, p in calls))
 check("only the review job is re-run, not the run's other failed jobs",
       all(p.startswith("/repos/o/live/actions/jobs/2") and p.endswith("/rerun") for m, p in calls if m == "POST"))
 check("a run before its reset waits", "run 2 (aaaaaaa): waiting for the reset at 2026-11-26T18:44Z" in report)

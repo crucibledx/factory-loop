@@ -6,8 +6,9 @@ Subcommands (all read GH_TOKEN, REPO=owner/name, PR=number and HEAD_SHA from the
   post     read .loop-review/result.json, reply to/resolve earlier threads, post the review
   gate     exit 1 while unresolved reviewer threads with a blocking severity remain
 
-post and gate run in a job that holds the write token but never the PR's code. They take nothing from the review job
-except result.json, which they treat as untrusted: the PR state, the mode and the open threads come from the API.
+post and gate run in a job that holds the write token but never checks out the PR's code. They take nothing from the
+review job except result.json, which they treat as untrusted: the PR state, the mode and the open threads come from the
+API. (factory-loop's own self-review runs the PR's workflow and loop_ref by design, so this holds for other repos.)
 """
 import json
 import os
@@ -27,6 +28,7 @@ REVIEW_WAIT_SECONDS = 40 * 60  # below the job timeout
 REVIEW_POLL_SECONDS = 20
 MAX_RESULT_BYTES = 1_000_000
 MAX_FINDINGS = 100
+MAX_LINE = 10_000_000
 VERDICTS = ("fixed", "obsolete", "accepted", "not_fixed")
 
 
@@ -92,6 +94,11 @@ query($id: ID!, $after: String) {
 }"""
 
 
+def last_match(pattern, text):
+    found = list(pattern.finditer(text))
+    return found[-1] if found else None
+
+
 def thread_comments(node):
     comments = list(node["comments"]["nodes"])
     page = node["comments"].get("pageInfo") or {}
@@ -120,7 +127,8 @@ def threads():
             first = (node["comments"]["nodes"] or [None])[0]
             if not first:
                 continue
-            mark = FINDING_MARK.search(first["body"] or "")
+            # The marker this code appends comes last; an earlier one would be quoted text.
+            mark = last_match(FINDING_MARK, first["body"] or "")
             if not (is_reviewer((first.get("author") or {}).get("login")) and mark):
                 continue
             comments = thread_comments(node)
@@ -150,7 +158,7 @@ def last_review_marker():
         reviews = request("GET", f"/repos/{env('REPO')}/pulls/{env('PR')}/reviews?per_page=100&page={page}")
         for review in reviews:
             if is_reviewer((review.get("user") or {}).get("login")):
-                found = REVIEW_MARK.search(review.get("body") or "")
+                found = last_match(REVIEW_MARK, review.get("body") or "")
                 if found:
                     marker = {"sha": found.group(1), "first_size": int(found.group(2) or 0)}
         if len(reviews) < 100:
@@ -177,7 +185,8 @@ def is_ancestor(old, new):
     try:
         compare = request("GET", f"/repos/{env('REPO')}/compare/{old}...{new}?per_page=1")
     except RuntimeError as err:
-        print(f"cannot compare {old[:7]}...{new[:7]}, reviewing in full: {err}")
+        # stderr: collect's stdout is the mode, written to $GITHUB_OUTPUT.
+        print(f"cannot compare {old[:7]}...{new[:7]}, reviewing in full: {err}", file=sys.stderr)
         return False
     return compare.get("status") in ("ahead", "identical")
 
@@ -268,7 +277,8 @@ def resolve(thread_id):
 
 
 def clip(value, limit):
-    return value.strip()[:limit] if isinstance(value, str) else ""
+    """A text field of result.json, without HTML comments: a forged review or finding marker must not reach a body."""
+    return value.strip()[:limit].replace("<!--", "&lt;!--") if isinstance(value, str) else ""
 
 
 def entries(result, key):
@@ -279,9 +289,9 @@ def entries(result, key):
 
 
 def finding_line(value):
-    if isinstance(value, str) and value.strip().isdigit():
+    if isinstance(value, str) and value.strip().isdecimal() and len(value.strip()) <= 8:
         value = int(value)
-    return value if isinstance(value, int) and not isinstance(value, bool) and value > 0 else None
+    return value if isinstance(value, int) and not isinstance(value, bool) and 0 < value <= MAX_LINE else None
 
 
 def load_result(path):
@@ -294,8 +304,8 @@ def load_result(path):
             sys.exit(f"result.json is larger than {MAX_RESULT_BYTES} bytes")
         with open(path, encoding="utf-8") as fh:
             raw = json.load(fh)
-    except (OSError, ValueError) as err:
-        sys.exit(f"reviewer produced no valid result.json: {err}")
+    except (OSError, ValueError, RecursionError) as err:
+        sys.exit(f"reviewer produced no valid result.json (was the review artifact downloaded?): {err!r}"[:500])
     if not isinstance(raw, dict):
         sys.exit("result.json is not a JSON object")
     findings = []
