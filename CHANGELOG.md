@@ -5,7 +5,8 @@
 - `loop-review` keeps PR code away from the write token (factory-loop#37). The new `reviewer` job runs collect, the
   `run_checks` installs and `droid exec` with read-only permissions, and uploads `result.json` as an artifact. The
   `review` job (still the required `review / review` check) needs it, holds the write token, and checks out only
-  factory-loop. It takes nothing from the reviewer job but `result.json`, which it schema-checks. The head, mode,
+  factory-loop. It takes nothing from the reviewer job but `result.json`, which it schema-checks; a blocking finding
+  without a usable file and line keeps the head unreviewed, as one that cannot be threaded does. The head, mode,
   size and open threads come from the API, not `context.json`, and thread verdicts apply only to the reviewer's
   open threads. It runs even in a cancelled run and then fails, as it does when the reviewer job did not finish, so
   the required check is never skipped. `loop-review-retry` re-runs the stopped `reviewer` job, and GitHub re-runs

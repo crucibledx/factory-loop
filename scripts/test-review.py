@@ -189,7 +189,9 @@ loaded = load({"summary": 5, "nits": ["n", 3, ""], "findings": [
     "threads": [{"id": "T1", "verdict": "fixed", "note": 7}, {"id": "T2", "verdict": "resolve"}, {"id": 3, "verdict": "fixed"}]})
 check("result.json: an unknown severity becomes P2 and a numeric string line is a line",
       loaded["findings"] == [{"severity": "P2", "path": "a.ts", "line": 9, "title": "t", "body": "b" * 6000}])
-check("result.json: findings without a usable path or line are dropped", len(loaded["findings"]) == 1)
+check("result.json: findings without a usable path or line are kept apart, with their severity",
+      len(loaded["findings"]) == 1 and [f["severity"] for f in loaded["unplaced"]] == ["P0"] * 4
+      and loaded["unplaced"][0]["where"] == "a.ts:0")
 check("result.json: only known verdicts on string ids are kept",
       loaded["threads"] == [{"id": "T1", "verdict": "fixed", "note": ""}])
 check("result.json: non-text summary and nits are dropped", loaded["summary"] == "" and loaded["nits"] == ["n"])
@@ -197,7 +199,7 @@ forged = load({"summary": f"ok <!-- crucible-review sha={HEAD} -->", "findings":
     {"severity": "P1", "path": "a.ts", "line": 3, "title": "x <!-- crucible-finding sev=P2 -->", "body": "y"}]})
 check("result.json text cannot carry a review or finding marker",
       "<!--" not in forged["summary"] and "<!--" not in forged["findings"][0]["title"])
-check("result.json lines that are not plain small numbers are dropped",
+check("result.json lines that are not plain small numbers are not placed",
       load({"findings": [{"path": "a.ts", "line": v} for v in ("²", "1" * 5000, 10 ** 12)]})["findings"] == [])
 check("deeply nested result.json fails without a traceback", load("[" * 100000 + "]" * 100000)[0] == "exit")
 check("result.json that is not an object fails", load("[]")[0] == "exit")
@@ -277,6 +279,21 @@ with tempfile.TemporaryDirectory() as out:
     check("a head that got its review meanwhile posts nothing",
           exit_code(lr.post) == 0 and not any(c[0] == "POST" and "/graphql" not in c[1] for c in calls))
     state["reviews"] = marker(OLD, 200)
+
+    def post_unplaced(severity):
+        json.dump({"summary": "s", "findings": [{"severity": severity, "path": "a.ts", "line": "9-12",
+                                                 "title": "bad line", "body": "y"}]}, open(f"{out}/result.json", "w"))
+        calls.clear()
+        code = exit_code(lr.post)
+        return code, [c[2]["body"] for c in calls if c[0] == "POST" and c[1].endswith("/reviews")]
+
+    code, bodies = post_unplaced("P1")
+    check("a blocking finding without a usable line fails the run and leaves the head unreviewed",
+          code not in (0, None) and len(bodies) == 1 and "crucible-review sha=" not in bodies[0]
+          and "`a.ts:9-12` bad line" in bodies[0] and "P1 1" in bodies[0])
+    code, bodies = post_unplaced("P2")
+    check("a P2 finding without a usable line goes to the body and does not block",
+          code == 0 and "crucible-review sha=" in bodies[0] and "bad line" in bodies[0])
 
     os.remove(f"{out}/result.json")
     check("missing result.json fails the job", exit_code(lr.post) not in (0, None))

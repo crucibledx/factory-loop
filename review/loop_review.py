@@ -308,21 +308,27 @@ def load_result(path):
         sys.exit(f"reviewer produced no valid result.json (was the review artifact downloaded?): {err!r}"[:500])
     if not isinstance(raw, dict):
         sys.exit("result.json is not a JSON object")
-    findings = []
+    findings, unplaced = [], []
     for item in entries(raw, "findings"):
         path_, line = clip(item.get("path"), 400), finding_line(item.get("line"))
+        finding = {"severity": item.get("severity") if item.get("severity") in SEVERITIES else "P2",
+                   "path": path_, "line": line, "title": clip(item.get("title"), 200),
+                   "body": clip(item.get("body"), 6000)}
         if path_ and line:
-            severity = item.get("severity") if item.get("severity") in SEVERITIES else "P2"
-            findings.append({"severity": severity, "path": path_, "line": line,
-                             "title": clip(item.get("title"), 200), "body": clip(item.get("body"), 6000)})
-    if len(findings) > MAX_FINDINGS:
-        sys.exit(f"result.json has {len(findings)} findings; more than {MAX_FINDINGS} is not a review")
+            findings.append(finding)
+        else:
+            # Kept, not dropped: a blocking finding without a location must still keep the head unreviewed.
+            finding["where"] = clip(str(item.get("path")), 200) + ":" + clip(str(item.get("line")), 40)
+            unplaced.append(finding)
+    if len(findings) + len(unplaced) > MAX_FINDINGS:
+        sys.exit(f"result.json has {len(findings) + len(unplaced)} findings; more than {MAX_FINDINGS} is not a review")
     verdicts = [{"id": item["id"], "verdict": item.get("verdict"), "note": clip(item.get("note"), 800)}
                 for item in entries(raw, "threads")
                 if isinstance(item.get("id"), str) and item.get("verdict") in VERDICTS]
     nits = raw.get("nits", [])
     nits = [clip(n, 500) for n in nits[:MAX_FINDINGS] if clip(n, 500)] if isinstance(nits, list) else []
-    return {"summary": clip(raw.get("summary"), 4000), "findings": findings, "threads": verdicts, "nits": nits}
+    return {"summary": clip(raw.get("summary"), 4000), "findings": findings, "unplaced": unplaced,
+            "threads": verdicts, "nits": nits}
 
 
 def post():
@@ -352,8 +358,8 @@ def post():
             reply(thread["comment_id"], f"Not fixed in {head[:7]}: {note or 'the issue is still present.'}")
             followed["not_fixed"] += 1
 
-    findings = result["findings"]
-    counts = {s: sum(1 for f in findings if f["severity"] == s) for s in SEVERITIES}
+    findings, unplaced = result["findings"], result["unplaced"]
+    counts = {s: sum(1 for f in findings + unplaced if f["severity"] == s) for s in SEVERITIES}
     lines = [f"### Crucible review ({context['mode']}, {head[:7]})", "", result["summary"], ""]
     lines.append("New findings: " + ", ".join(f"{s} {counts[s]}" for s in SEVERITIES))
     if context["mode"] == "followup":
@@ -366,6 +372,9 @@ def post():
             f"\n**Scope warning:** the PR grew from {context['first_size']} to {context['size']} changed lines "
             "since the first review. Ask Nazar before growing it further."
         )
+    if unplaced:
+        lines += ["", "#### Findings without a usable file and line"]
+        lines += [f"- **{f['severity']}** `{f['where']}` {f['title']}: {f['body']}" for f in unplaced]
     nits = result["nits"]
     if nits:
         lines += ["", "<details><summary>Non-blocking nits</summary>", ""] + [f"- {n}" for n in nits] + ["", "</details>"]
@@ -373,7 +382,9 @@ def post():
         {"path": f["path"], "line": f["line"], "side": "RIGHT", "body": finding_body(f)}
         for f in findings
     ]
-    marker = f"\n<!-- crucible-review sha={head} first_size={context['first_size']} -->"
+    unplaced_blocking = [f for f in unplaced if f["severity"] in blocking_severities()]
+    # Without a thread the gate cannot track a blocking finding, so this head stays unreviewed (no marker).
+    marker = "" if unplaced_blocking else f"\n<!-- crucible-review sha={head} first_size={context['first_size']} -->"
     payload = {"commit_id": head, "event": "COMMENT", "body": "\n".join(lines) + marker, "comments": comments}
     try:
         request("POST", f"/repos/{env('REPO')}/pulls/{env('PR')}/reviews", payload)
@@ -382,6 +393,8 @@ def post():
             raise
         post_fallback(head, "\n".join(lines), marker, comments)
     print(json.dumps({"findings": counts, "followed": followed}))
+    if unplaced_blocking:
+        sys.exit(f"{len(unplaced_blocking)} blocking finding(s) have no usable file and line; see the review body")
     if unresolved:
         sys.exit(f"could not resolve {len(unresolved)} thread(s) judged fixed; the token needs contents: write. "
                  + "; ".join(unresolved))
