@@ -25,6 +25,8 @@ RESETS_AT = re.compile(r"resets at (\d{4}-\d\d-\d\dT\d\d:\d\dZ)")
 UNITS = {"d": 86400, "h": 3600, "min": 60, "m": 60, "s": 1}
 LOOKBACK_DAYS = 8  # longer than the longest reset (the weekly limit), so a stopped run is still swept
 MAX_ATTEMPTS = 10  # a limit that never resets must not re-run the job forever
+# The exec runs in the reviewer job; runs from before the split ran it in the review job.
+REVIEW_JOBS = ("reviewer", "review")
 
 
 def utcnow():
@@ -95,13 +97,17 @@ def stopped_at_limit(repo, job_id):
 
 
 def retry_run(repo, run, now):
-    """Re-run the review job of run if the usage limit stopped it. Returns a log line or None."""
+    """Re-run the review job of run that the usage limit stopped, if any. Returns a log line or None."""
     jobs = paged(f"/repos/{repo}/actions/runs/{run['id']}/jobs?filter=latest", "jobs")
-    review = next((j for j in jobs if j["name"].split(" / ")[-1] == "review" and j["conclusion"] == "failure"), None)
+    failed = [j for j in jobs if j["name"].split(" / ")[-1] in REVIEW_JOBS and j["conclusion"] == "failure"]
+    failed.sort(key=lambda j: REVIEW_JOBS.index(j["name"].split(" / ")[-1]))
+    review, reset = None, None
+    for job in failed:
+        stopped, reset = stopped_at_limit(repo, job["id"])
+        if stopped:
+            review = job
+            break
     if not review:
-        return None
-    stopped, reset = stopped_at_limit(repo, review["id"])
-    if not stopped:
         return None
     where = f"{repo} run {run['id']} ({run['head_sha'][:7]})"
     if reset and now < reset:
@@ -115,7 +121,8 @@ def retry_run(repo, run, now):
     pr = request("GET", f"/repos/{repo}/pulls/{number}")
     if pr["state"] != "open" or pr.get("draft") or pr["head"]["sha"] != run["head_sha"]:
         return f"{where}: PR #{number} is closed, a draft, or has a newer head; skipped"
-    # Only the review job: other failed jobs of the run (auto-merge, for one) are not ours to repeat.
+    # Only the review job (GitHub re-runs the gate that needs it): other failed jobs of the run, auto-merge for one,
+    # are not ours to repeat.
     request("POST", f"/repos/{repo}/actions/jobs/{review['id']}/rerun", {})
     return f"{where}: re-ran the review for PR #{number}"
 

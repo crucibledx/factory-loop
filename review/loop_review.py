@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 """Crucible loop review helper: collect PR state, post one consolidated review, follow up threads, gate merges.
 
-Subcommands (all read GH_TOKEN, REPO=owner/name, PR=number from the environment):
+Subcommands (all read GH_TOKEN, REPO=owner/name, PR=number and HEAD_SHA from the environment):
   collect  write .loop-review/context.json, diff.patch and prompt.md; print the mode (full|followup|gate)
   post     read .loop-review/result.json, reply to/resolve earlier threads, post the review
   gate     exit 1 while unresolved reviewer threads with a blocking severity remain
+
+post and gate run in a job that holds the write token but never the PR's code. They take nothing from the review job
+except result.json, which they treat as untrusted: the PR state, the mode and the open threads come from the API.
 """
 import json
 import os
@@ -22,6 +25,9 @@ FINDING_MARK = re.compile(r"<!-- crucible-finding sev=(P[0-2]) -->")
 SEVERITIES = ("P0", "P1", "P2")
 REVIEW_WAIT_SECONDS = 40 * 60  # below the job timeout
 REVIEW_POLL_SECONDS = 20
+MAX_RESULT_BYTES = 1_000_000
+MAX_FINDINGS = 100
+VERDICTS = ("fixed", "obsolete", "accepted", "not_fixed")
 
 
 def env(name, default=None):
@@ -156,11 +162,24 @@ def git(*args):
     return subprocess.run(["git", *args], capture_output=True, text=True, check=False)
 
 
-def checked_out_head():
+def head_sha():
+    """The commit under review: the event's head, else (local runs) the checked-out commit."""
+    if os.environ.get("HEAD_SHA"):
+        return os.environ["HEAD_SHA"]
     out = git("rev-parse", "HEAD")
     if out.returncode != 0:
         sys.exit(f"cannot read the checked-out commit: {out.stderr.strip()}")
     return out.stdout.strip()
+
+
+def is_ancestor(old, new):
+    """Whether old is new or one of its ancestors. A commit the API no longer knows (rewritten history) is not."""
+    try:
+        compare = request("GET", f"/repos/{env('REPO')}/compare/{old}...{new}?per_page=1")
+    except RuntimeError as err:
+        print(f"cannot compare {old[:7]}...{new[:7]}, reviewing in full: {err}")
+        return False
+    return compare.get("status") in ("ahead", "identical")
 
 
 def ensure_commit(sha):
@@ -184,29 +203,21 @@ def render_prompt(mode, run_checks):
     return prompt.replace("{{CHECKS}}", checks)
 
 
-def collect():
-    os.makedirs(OUT, exist_ok=True)
+def pr_state():
+    """The review context, from the API only, so the review job and the post job derive the same one."""
     pr = request("GET", f"/repos/{env('REPO')}/pulls/{env('PR')}")
-    # Review exactly what is checked out; a newer push gets its own run.
-    head, base = checked_out_head(), pr["base"]["sha"]
-    ensure_commit(base)
+    # Review exactly the event's head; a newer push gets its own run.
+    head, base = head_sha(), pr["base"]["sha"]
     size = pr["additions"] + pr["deletions"]
     marker = last_review_marker()
     event = os.environ.get("EVENT_NAME", "pull_request")
     if event != "pull_request" or (marker and head.startswith(marker["sha"])):
         mode = "gate"
-    elif marker and git("merge-base", "--is-ancestor", marker["sha"], head).returncode == 0:
+    elif marker and is_ancestor(marker["sha"], head):
         mode = "followup"
     else:
         mode = "full"
-    since = marker["sha"] if mode == "followup" else base
-    diff = git("diff", "--unified=5", f"{since}...{head}" if mode == "full" else f"{since}..{head}")
-    if diff.returncode != 0:
-        sys.exit(f"git diff {since} {head} failed: {diff.stderr.strip()}")
-    with open(f"{OUT}/diff.patch", "w", encoding="utf-8") as fh:
-        fh.write(diff.stdout)
-    first_size = marker["first_size"] if marker and marker["first_size"] else size
-    context = {
+    return {
         "mode": mode,
         "repo": env("REPO"),
         "pr": int(env("PR")),
@@ -214,16 +225,29 @@ def collect():
         "body": (pr.get("body") or "")[:6000],
         "head": head,
         "base": base,
-        "since": since,
+        "since": marker["sha"] if mode == "followup" else base,
         "size": size,
-        "first_size": first_size,
+        "first_size": marker["first_size"] if marker and marker["first_size"] else size,
         "open_threads": [t for t in threads() if not t["resolved"]] if mode != "gate" else [],
     }
+
+
+def collect():
+    os.makedirs(OUT, exist_ok=True)
+    context = pr_state()
+    head, since = context["head"], context["since"]
+    ensure_commit(context["base"])
+    ensure_commit(since)
+    diff = git("diff", "--unified=5", f"{since}...{head}" if context["mode"] == "full" else f"{since}..{head}")
+    if diff.returncode != 0:
+        sys.exit(f"git diff {since} {head} failed: {diff.stderr.strip()}")
+    with open(f"{OUT}/diff.patch", "w", encoding="utf-8") as fh:
+        fh.write(diff.stdout)
     with open(f"{OUT}/context.json", "w", encoding="utf-8") as fh:
         json.dump(context, fh, indent=2)
     with open(f"{OUT}/prompt.md", "w", encoding="utf-8") as fh:
-        fh.write(render_prompt(mode, os.environ.get("LOOP_RUN_CHECKS") == "true"))
-    print(mode)
+        fh.write(render_prompt(context["mode"], os.environ.get("LOOP_RUN_CHECKS") == "true"))
+    print(context["mode"])
 
 
 def finding_body(finding):
@@ -243,24 +267,69 @@ def resolve(thread_id):
     graphql("mutation($id: ID!) { resolveReviewThread(input: {threadId: $id}) { thread { id } } }", id=thread_id)
 
 
-def post():
-    with open(f"{OUT}/context.json", encoding="utf-8") as fh:
-        context = json.load(fh)
+def clip(value, limit):
+    return value.strip()[:limit] if isinstance(value, str) else ""
+
+
+def entries(result, key):
+    items = result.get(key, [])
+    if not isinstance(items, list):
+        sys.exit(f"result.json: {key} is not a list")
+    return [item for item in items if isinstance(item, dict)]
+
+
+def finding_line(value):
+    if isinstance(value, str) and value.strip().isdigit():
+        value = int(value)
+    return value if isinstance(value, int) and not isinstance(value, bool) and value > 0 else None
+
+
+def load_result(path):
+    """result.json reduced to the fields post uses, with their types and lengths checked. Exits when it is unusable.
+
+    The file comes from the job that ran the reviewer, and with run_checks the PR's code, so nothing in it is trusted.
+    """
     try:
-        with open(f"{OUT}/result.json", encoding="utf-8") as fh:
-            result = json.load(fh)
-    except (OSError, json.JSONDecodeError) as err:
+        if os.path.getsize(path) > MAX_RESULT_BYTES:
+            sys.exit(f"result.json is larger than {MAX_RESULT_BYTES} bytes")
+        with open(path, encoding="utf-8") as fh:
+            raw = json.load(fh)
+    except (OSError, ValueError) as err:
         sys.exit(f"reviewer produced no valid result.json: {err}")
+    if not isinstance(raw, dict):
+        sys.exit("result.json is not a JSON object")
+    findings = []
+    for item in entries(raw, "findings"):
+        path_, line = clip(item.get("path"), 400), finding_line(item.get("line"))
+        if path_ and line:
+            severity = item.get("severity") if item.get("severity") in SEVERITIES else "P2"
+            findings.append({"severity": severity, "path": path_, "line": line,
+                             "title": clip(item.get("title"), 200), "body": clip(item.get("body"), 6000)})
+    if len(findings) > MAX_FINDINGS:
+        sys.exit(f"result.json has {len(findings)} findings; more than {MAX_FINDINGS} is not a review")
+    verdicts = [{"id": item["id"], "verdict": item.get("verdict"), "note": clip(item.get("note"), 800)}
+                for item in entries(raw, "threads")
+                if isinstance(item.get("id"), str) and item.get("verdict") in VERDICTS]
+    nits = raw.get("nits", [])
+    nits = [clip(n, 500) for n in nits[:MAX_FINDINGS] if clip(n, 500)] if isinstance(nits, list) else []
+    return {"summary": clip(raw.get("summary"), 4000), "findings": findings, "threads": verdicts, "nits": nits}
+
+
+def post():
+    context = pr_state()
     head = context["head"]
+    if context["mode"] == "gate":
+        print(f"{head[:7]} already has a review; nothing to post.")
+        return
+    result = load_result(f"{OUT}/result.json")
     by_id = {t["id"]: t for t in context["open_threads"]}
     followed = {"fixed": 0, "not_fixed": 0, "accepted": 0}
     unresolved = []
-    for verdict in result.get("threads", []):
-        thread = by_id.get(verdict.get("id"))
+    for verdict in result["threads"]:
+        thread = by_id.get(verdict["id"])
         if not thread:
             continue
-        kind = verdict.get("verdict")
-        note = (verdict.get("note") or "").strip()
+        kind, note = verdict["verdict"], verdict["note"]
         if kind in ("fixed", "obsolete"):
             reply(thread["comment_id"], f"Fixed in {head[:7]}." + (f" {note}" if note else ""))
             try_resolve(thread, unresolved)
@@ -273,9 +342,9 @@ def post():
             reply(thread["comment_id"], f"Not fixed in {head[:7]}: {note or 'the issue is still present.'}")
             followed["not_fixed"] += 1
 
-    findings = [f for f in result.get("findings", []) if f.get("path") and f.get("line")]
-    counts = {s: sum(1 for f in findings if f.get("severity") == s) for s in SEVERITIES}
-    lines = [f"### Crucible review ({context['mode']}, {head[:7]})", "", result.get("summary", "").strip(), ""]
+    findings = result["findings"]
+    counts = {s: sum(1 for f in findings if f["severity"] == s) for s in SEVERITIES}
+    lines = [f"### Crucible review ({context['mode']}, {head[:7]})", "", result["summary"], ""]
     lines.append("New findings: " + ", ".join(f"{s} {counts[s]}" for s in SEVERITIES))
     if context["mode"] == "followup":
         lines.append(
@@ -287,11 +356,11 @@ def post():
             f"\n**Scope warning:** the PR grew from {context['first_size']} to {context['size']} changed lines "
             "since the first review. Ask Nazar before growing it further."
         )
-    nits = [n for n in result.get("nits", []) if n]
+    nits = result["nits"]
     if nits:
         lines += ["", "<details><summary>Non-blocking nits</summary>", ""] + [f"- {n}" for n in nits] + ["", "</details>"]
     comments = [
-        {"path": f["path"], "line": int(f["line"]), "side": "RIGHT", "body": finding_body(f)}
+        {"path": f["path"], "line": f["line"], "side": "RIGHT", "body": finding_body(f)}
         for f in findings
     ]
     marker = f"\n<!-- crucible-review sha={head} first_size={context['first_size']} -->"
@@ -401,7 +470,7 @@ def wait_for_review(head):
 
 def gate():
     blocking = blocking_severities()
-    head = checked_out_head()
+    head = head_sha()
     if not wait_for_review(head):
         report(f"No completed review for {head[:7]} yet. The review run for this commit sets this check.")
         sys.exit(1)

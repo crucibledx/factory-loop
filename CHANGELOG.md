@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- `loop-review` keeps PR code away from the write token (factory-loop#37). The new `reviewer` job runs collect, the
+  `run_checks` installs and `droid exec` with read-only permissions, and uploads `result.json` as an artifact. The
+  `review` job (still the required `review / review` check) needs it, holds the write token, and checks out only
+  factory-loop. It takes nothing from the reviewer job but `result.json`, which it schema-checks. The head, mode,
+  size and open threads come from the API, not `context.json`, and thread verdicts apply only to the reviewer's
+  open threads. It runs unless the run was cancelled, and fails when the reviewer job failed or was cancelled, so the
+  required check is never skipped. `loop-review-retry` re-runs the stopped `reviewer` job, and GitHub re-runs the
+  gate after it. Callers don't change. With `run_checks`, PR code can still read `FACTORY_API_KEY` and shape the
+  verdict, so the input stays off by default.
+
 ## v0.6.0 — 2026-11-27
 
 - The caller template's `review` job skips draft PRs (`!github.event.pull_request.draft`), and so does this repo's
