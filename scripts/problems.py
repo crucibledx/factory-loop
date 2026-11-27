@@ -63,8 +63,11 @@ def too_deep(text):
 
 
 def parse_int(digits):
-    """int() with the 4300-digit limit of Python 3.11+ on every version; 3.9 has none and is slow on long numbers."""
-    if len(digits) > 4300:
+    """int() with the 4300-digit limit of Python 3.11+ on every version; 3.9 has none and is slow on long numbers.
+
+    json passes the sign too; like Python's limit, this counts only the digits.
+    """
+    if len(digits.lstrip("-")) > 4300:
         raise ValueError("integer too long")
     return int(digits)
 
