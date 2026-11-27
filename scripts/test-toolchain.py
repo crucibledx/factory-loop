@@ -336,9 +336,13 @@ check("loop-review restores its moved checkout after the upload, gated on a succ
 
 
 def last_step(text, idx):
-    """The restore's run line is followed by another job (or the file ends), never by another step."""
-    rest = text[text.index("\n", idx) + 1:]
-    return rest.strip() == "" or rest.startswith("\n  ")
+    """After the restore's run line, the next meaningful line is a job key (two-space indent) or the file ends;
+    a step line (deeper indent) means something was appended after the restore."""
+    for line in text[text.index("\n", idx) + 1:].splitlines():
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        return line.startswith("  ") and not line.startswith("   ")
+    return True
 
 
 check("each restore is its job's last step",
@@ -346,6 +350,8 @@ check("each restore is its job's last step",
       and all(last_step(wf, wf.index(BACK)) for wf in (
           open(os.path.join(ROOT, ".github", "workflows", n), encoding="utf-8").read()
           for n in ("loop-mention.yml", "loop-implement.yml", "loop-review.yml"))))
+check("last_step rejects a blank-line-separated step after the restore",
+      not last_step(BACK + '\n\n      - run: prettier --check .\n', 0))
 
 # install.sh never installs an active declaration: a copied toolchain.json would override inference.
 install = open(os.path.join(ROOT, "scripts", "install.sh"), encoding="utf-8").read()
