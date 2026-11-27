@@ -44,7 +44,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           lfs: ${{ inputs.lfs }}
       - id: pkg
@@ -52,7 +52,7 @@ jobs:
           if [ -f package.json ]; then echo "present=true" >> "$GITHUB_OUTPUT"; else
             echo "present=false" >> "$GITHUB_OUTPUT"; echo "::notice::No package.json, nothing to check."; fi
       - if: steps.pkg.outputs.present == 'true'
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: ${{ inputs.bun_version }}
           bun-version-file: ${{ inputs.bun_version == '' && hashFiles('.bun-version') != '' && '.bun-version' || '' }}
@@ -78,7 +78,7 @@ jobs:
       contents: read
       checks: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           lfs: ${{ inputs.lfs }}
       - id: pkg
@@ -89,7 +89,7 @@ jobs:
           elif [ -z "$TEST_COMMAND" ]; then echo "::notice::test_command is empty, tests skipped."; echo "present=false" >> "$GITHUB_OUTPUT"
           else echo "present=true" >> "$GITHUB_OUTPUT"; fi
       - if: steps.pkg.outputs.present == 'true'
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: ${{ inputs.bun_version }}
           bun-version-file: ${{ inputs.bun_version == '' && hashFiles('.bun-version') != '' && '.bun-version' || '' }}
@@ -103,7 +103,7 @@ jobs:
       - if: >-
           !cancelled() && steps.pkg.outputs.present == 'true' && inputs.junit_paths != '' &&
           (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-        uses: mikepenz/action-junit-report@v5
+        uses: mikepenz/action-junit-report@a16be3a69023e9bd7e748ede768b3282ea7b30ce # v6.7.1
         with:
           report_paths: ${{ inputs.junit_paths }}
           include_passed: true
@@ -114,10 +114,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           lfs: ${{ inputs.lfs }}
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: ${{ inputs.bun_version }}
           bun-version-file: ${{ inputs.bun_version == '' && hashFiles('.bun-version') != '' && '.bun-version' || '' }}

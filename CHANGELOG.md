@@ -2,10 +2,28 @@
 
 ## Unreleased
 
+- `scripts/problems.py` skips a report line nested more than 32 levels deep before parsing it, so it gives the same
+  result on every Python version. Before, it relied on json's `RecursionError`, which Python 3.9 raises on deep input
+  but 3.12 does not, so a deeply nested line was skipped on 3.9 and read on 3.12, and `test-problems.py` failed on
+  the CI runner's 3.12. Integers longer than 4300 digits, which 3.11 and later refuse, are skipped on 3.9 too.
+- Reusable workflows pin every directly referenced third-party action to a release commit and version comment.
+  Checkout v7.0.1, setup-bun v2.2.0, JUnit report v6.7.1, and create-github-app-token v3.4.0 run on Node 24;
+  droid-action v14 is the current composite release. Workflow inputs and the `@v0` caller interface are unchanged.
 - The end-of-day summary (`loop-orchestrator`) has a "Problems" section: the day's problem reports from
   `~/crucible-agents/.workstream/problems.jsonl`, fixed and open, grouped by kind. `scripts/problems.py` prints it,
   checks each line against the format in hq `docs/workstream.md` and skips invalid ones. README step 7 follows the
   rule that every problem is reported to Root, fixed or not.
+- `loop-review` keeps PR code away from the write token (factory-loop#37). The new `reviewer` job runs collect, the
+  `run_checks` installs and `droid exec` with read-only permissions, and uploads `result.json` as an artifact. The
+  `review` job (still the required `review / review` check) needs it, holds the write token, and checks out only
+  factory-loop. It takes nothing from the reviewer job but `result.json`, which it schema-checks; a blocking finding
+  without a usable file and line keeps the head unreviewed, as one that cannot be threaded does. The head, mode,
+  size and open threads come from the API, not `context.json`, and thread verdicts apply only to the reviewer's
+  open threads. It runs even in a cancelled run and then fails, as it does when the reviewer job did not finish, so
+  the required check is never skipped. `loop-review-retry` re-runs the stopped `reviewer` job, and GitHub re-runs
+  the gate after it. Callers don't change. With `run_checks`, PR code can still read `FACTORY_API_KEY` and shape the
+  verdict, so the input stays off by default. factory-loop's own self-review still runs the PR's workflow and
+  `review/` scripts with the write token, by design.
 - factory-loop checks itself in CI: the new `checks` job (`self-checks.yml`) runs `scripts/check.sh` (every
   `scripts/test-*`, a pinned and checksum-verified `actionlint`, and every tracked JSON file) on each PR and on `main`,
   read-only and without secrets. `scripts/test-review.py` no longer depends on inherited `GITHUB_*` and `LOOP_*`

@@ -1,14 +1,16 @@
 name: Loop / review
 
-# One check that both reviews and gates the PR:
+# One required check (review / review) that gates the PR on a review from a separate reviewer job:
 # - pull_request: full review on the first non-draft push, then follow-up reviews of new commits only.
 # - pull_request_review: no model run; re-evaluates the gate, e.g. after Nazar resolves a thread and submits a review.
 #   (pull_request_review_comment and pull_request_review_thread don't count for required checks.)
-# The job fails while reviewer threads with a blocking severity stay unresolved, or while the checked-out commit has
-# no completed review, so a ruleset can require it. A gate-only run waits for a review run of the same commit that is
+# The check fails while reviewer threads with a blocking severity stay unresolved, or while the head commit has no
+# completed review, so a ruleset can require it. A gate-only run waits for a review run of the same commit that is
 # still in progress, so it reports that review's verdict instead of a stale failure.
-# When the Factory usage limit stops the reviewer, the Review step says so (with the reset time) instead of looking like
-# a review failure, and loop-review-retry.yml re-runs the job after the reset.
+# The reviewer job (review / reviewer) runs the model, and with run_checks the PR's code, with read-only permissions.
+# The review job posts its result.json and gates with the write token, rebuilding the PR state from the API.
+# When the Factory usage limit stops the reviewer, its Review step says so (with the reset time) instead of looking like
+# a review failure, and loop-review-retry.yml re-runs the reviewer job, and with it the gate, after the reset.
 
 on:
   workflow_call:
@@ -39,8 +41,9 @@ on:
       run_checks:
         description: >-
           Install the repo's toolchain (Bun and dependencies when it has bun.lock, actionlint when its loop contract
-          lists it) and let the reviewer run the loop contract's checks. This runs PR code in a job that holds
-          FACTORY_API_KEY and a write token, so enable it only where every PR author is trusted.
+          lists it) and let the reviewer run the loop contract's checks. This runs PR code in the reviewer job, which
+          has no write token but holds FACTORY_API_KEY and writes the result the gate acts on, so enable it only where
+          every PR author is trusted.
         type: boolean
         default: false
     secrets:
@@ -48,25 +51,26 @@ on:
         required: true
 
 jobs:
-  review:
-    if: |
-      (github.event_name == 'pull_request' && github.event.pull_request.draft == false) ||
-      (github.event_name == 'pull_request_review' && github.event.pull_request.draft == false)
+  # Runs the reviewer without a write token: PR code (run_checks, or a prompt injection) can reach this job, so the only
+  # thing it hands on is result.json, which the review job treats as untrusted.
+  reviewer:
+    if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     timeout-minutes: 45
     concurrency:
-      group: loop-review-${{ github.repository }}-${{ github.event.pull_request.number }}-${{ github.event_name }}
+      group: loop-review-${{ github.repository }}-${{ github.event.pull_request.number }}-reviewer
       cancel-in-progress: true
     permissions:
-      contents: write # resolveReviewThread is refused to the Actions token without it
-      pull-requests: write
-      actions: read # find a review run of the same commit that is still in progress
+      contents: read
+      pull-requests: read
+    outputs:
+      mode: ${{ steps.collect.outputs.mode }}
     env:
       GH_TOKEN: ${{ github.token }}
       REPO: ${{ github.repository }}
       PR: ${{ github.event.pull_request.number }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
       EVENT_NAME: ${{ github.event_name }}
-      BLOCKING_SEVERITIES: ${{ inputs.blocking_severities }}
       LOOP_REVIEW_DIR: ${{ github.workspace }}/.loop-review
       LOOP_STANDARDS: ${{ github.workspace }}/.factory-loop/plugins/crucible-loop/skills/engineering-standards/SKILL.md
       LOOP_REVIEW_PROMPT: ${{ github.workspace }}/.factory-loop/review/prompt.md
@@ -150,8 +154,71 @@ jobs:
             python3 .factory-loop/review/usage_limit.py note "$log" || true
             exit "$status"
           fi
-      - name: Post review
+      - name: Upload the review
         if: steps.collect.outputs.mode != 'gate'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: loop-review-result
+          path: ${{ env.LOOP_REVIEW_DIR }}/result.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+
+  # The check the rulesets require (review / review). It holds the write token and never checks out PR code; only
+  # factory-loop's own self-review runs the PR's workflow and loop_ref, by design.
+  # A skipped required check counts as passing, so it runs even when the run was cancelled (always()) and then fails,
+  # as it does when the reviewer job did not finish.
+  review:
+    needs: reviewer
+    if: |
+      always() && (
+        (github.event_name == 'pull_request' && github.event.pull_request.draft == false) ||
+        (github.event_name == 'pull_request_review' && github.event.pull_request.draft == false)
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    concurrency:
+      group: loop-review-${{ github.repository }}-${{ github.event.pull_request.number }}-${{ github.event_name }}
+      cancel-in-progress: true
+    permissions:
+      contents: write # resolveReviewThread is refused to the Actions token without it
+      pull-requests: write
+      actions: read # find a review run of the same commit that is still in progress
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      PR: ${{ github.event.pull_request.number }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      EVENT_NAME: ${{ github.event_name }}
+      BLOCKING_SEVERITIES: ${{ inputs.blocking_severities }}
+    steps:
+      # always(): in a cancelled run every other step is skipped, and a job whose steps all skip passes.
+      - name: Check the reviewer finished
+        if: always() && (cancelled() || (needs.reviewer.result != 'success' && needs.reviewer.result != 'skipped'))
+        env:
+          RESULT: ${{ needs.reviewer.result }}
+        run: |
+          echo "::error title=No review::The run was cancelled or the reviewer job ended as ${RESULT}, so this commit has no review. Re-run the review / reviewer job; a usage-limit stop is re-run after the reset."
+          exit 1
+      # Before the checkout, which cleans its path, so nothing the download writes can stand in for loop_review.py.
+      # A re-run of this job alone can outlive the artifact; post then needs it only if the head is still unreviewed.
+      - name: Download the review
+        if: needs.reviewer.outputs.mode == 'full' || needs.reviewer.outputs.mode == 'followup'
+        continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: loop-review-result
+          path: ${{ runner.temp }}/loop-review
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: crucibledx/factory-loop
+          ref: ${{ inputs.loop_ref }}
+          path: .factory-loop
+          persist-credentials: false
+      - name: Post review
+        if: needs.reviewer.outputs.mode == 'full' || needs.reviewer.outputs.mode == 'followup'
+        env:
+          LOOP_REVIEW_DIR: ${{ runner.temp }}/loop-review
         run: python3 .factory-loop/review/loop_review.py post
       - name: Gate
         run: python3 .factory-loop/review/loop_review.py gate
