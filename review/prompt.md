@@ -9,7 +9,8 @@ Inputs:
 - Org engineering standards: `{{STANDARDS_PATH}}` (skip if empty or missing). Also read the repo's `AGENTS.md`,
   `CONTRIBUTING.md`, `.factory/loop-contract.md`, and the spec the PR links, if present.
 - The org rules below. They are all you need from `crucibledx/hq`, which is private: don't try to read it, even when
-  a doc points there.
+  a doc points there. If the linked spec is in `hq`, review against the acceptance criteria quoted in the PR body or
+  the linked issue.
 
 {{ORG_RULES}}
 

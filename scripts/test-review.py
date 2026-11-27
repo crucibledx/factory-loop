@@ -451,12 +451,17 @@ check("no placeholder is left in either prompt", "{{" not in default_prompt + ch
 org_rules = open(lr.ORG_RULES_PATH, encoding="utf-8").read().strip()
 check("both prompts carry the org rules, so the reviewer needs nothing from the private hq repo",
       all(org_rules in p for p in (default_prompt, checks_prompt))
-      and all(rule in org_rules for rule in ("win on conflict", "bun build --compile", "Ember", "Complete, don't compete",
-                                             "MIT", "assetkit", "bun.lock", "feat(v0.x.y)", "annotated tags",
-                                             "homebrew-tap", "acceptance contract")))
+      and all(rule in " ".join(org_rules.split()) for rule in (
+          "wins on conflict", "bun build --compile", "Ember", "No rewrites", "Complete, don't compete", "MIT", "assetkit",
+          "light and dark", "bun.lock", "feat(v0.x.y)", "web and forge-skills-starter `v0.x.y: ...`", "semver",
+          "annotated tags", "manual", "homebrew-tap", "scoop-bucket", "never push to `main`", "never merge",
+          "acceptance contract")))
+rule_items = org_rules.split("\n- ")[1:]
+check("every org rule carries a severity hint",
+      rule_items and all(item.rstrip().endswith(("[P0]", "[P1]", "[P2]", "[nit]")) for item in rule_items))
 agents_md = open(os.path.join(os.path.dirname(__file__), "..", "AGENTS.md"), encoding="utf-8").read()
 check("neither the prompt nor AGENTS.md sends the reviewer to hq's AGENTS.md",
-      "don't try to read it" in default_prompt and "Org context: `crucibledx/hq`" not in agents_md
-      and "org-rules.md" in agents_md)
+      all("don't try to read it" in p for p in (default_prompt, checks_prompt)) and "org-rules.md" in agents_md
+      and all("reviewer can't" in line for line in agents_md.splitlines() if "crucibledx/hq" in line))
 
 sys.exit(1 if failures else 0)
