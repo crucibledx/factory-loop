@@ -16,8 +16,10 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from loop_review import report, request  # noqa: E402
 
 TITLE = "Review usage limit"
-# Only the CLI's own error line counts: the log also holds the reviewer's output, which may quote such an error.
-LIMIT_LINE = re.compile(r"^\s*Error during droid execution: 402\b.*usage limit", re.IGNORECASE)
+# The log also holds the reviewer's output, which may quote a CLI error; the CLI's own error that ended the exec is
+# the last one, so only that line is classified.
+CLI_ERROR = re.compile(r"^\s*Error during droid execution:", re.IGNORECASE)
+LIMIT_ERROR = re.compile(r"^\s*Error during droid execution: 402\b.*usage limit", re.IGNORECASE)
 RESETS_IN = re.compile(r"resets in ((?:\s*\d+\s*(?:d|h|min|m|s)\b)+)", re.IGNORECASE)
 RESETS_AT = re.compile(r"resets at (\d{4}-\d\d-\d\dT\d\d:\d\dZ)")
 UNITS = {"d": 86400, "h": 3600, "min": 60, "m": 60, "s": 1}
@@ -31,8 +33,8 @@ def utcnow():
 
 def limit_reset(log_text, now):
     """(hit, reset) for a droid exec log: hit is True on a 402 usage-limit error; reset is when it lifts, or None."""
-    line = next((ln for ln in log_text.splitlines() if LIMIT_LINE.search(ln)), None)
-    if line is None:
+    line = next((ln for ln in reversed(log_text.splitlines()) if CLI_ERROR.search(ln)), None)
+    if line is None or not LIMIT_ERROR.search(line):
         return False, None
     found = RESETS_IN.search(line)
     if not found:
@@ -82,7 +84,7 @@ def paged(path, key):
 
 def stopped_at_limit(repo, job_id):
     """(stopped, reset) from the job's annotations: whether `note` marked it, and the reset time it reported."""
-    for annotation in request("GET", f"/repos/{repo}/check-runs/{job_id}/annotations"):
+    for annotation in paged(f"/repos/{repo}/check-runs/{job_id}/annotations", None):
         if annotation.get("title") == TITLE:
             found = RESETS_AT.search(annotation.get("message") or "")
             if not found:
@@ -94,7 +96,7 @@ def stopped_at_limit(repo, job_id):
 
 def retry_run(repo, run, now):
     """Re-run the review job of run if the usage limit stopped it. Returns a log line or None."""
-    jobs = request("GET", f"/repos/{repo}/actions/runs/{run['id']}/jobs?filter=latest")["jobs"]
+    jobs = paged(f"/repos/{repo}/actions/runs/{run['id']}/jobs?filter=latest", "jobs")
     review = next((j for j in jobs if j["name"].split(" / ")[-1] == "review" and j["conclusion"] == "failure"), None)
     if not review:
         return None

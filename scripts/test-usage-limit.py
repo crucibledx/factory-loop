@@ -45,6 +45,11 @@ check("a limit without a reset time is still a stop", ul.limit_reset(ERR + "usag
 check("other failures are not a usage-limit stop",
       ul.limit_reset("Error: 500 internal error\nusage limit docs: https://x/402s\n", NOW)[0] is False
       and ul.limit_reset("Error: model not found", NOW) == (False, None))
+check("a fenced 402 quote followed by a real non-402 CLI error is not a stop",
+      ul.limit_reset("Finding:\n```\n" + LOG + "```\nError during droid execution: 500 server error\n", NOW)
+      == (False, None))
+check("the CLI's last error decides: a quoted 500 before a real 402 is still a stop",
+      ul.limit_reset("```\nError during droid execution: 500 x\n```\n" + LOG, NOW) == (True, at(18, 44)))
 check("the reviewer quoting a 402 usage-limit error is not a stop",
       ul.limit_reset("P2: the step should catch '402 ... usage limit (resets in 4h)'\n"
                      "  > " + LOG + "Error during droid execution: 500 server error\n", NOW) == (False, None))
@@ -100,6 +105,11 @@ JOBS[10] = ("failure", PAST_LIMIT)
 JOBS[11] = ("failure", PAST_LIMIT)
 # run 11 fails to load before older runs 1 and 6 are reached
 RUNS["o/live"].insert(0, run(11))
+# run 12's review job and run 13's usage-limit annotation are on the second page of their lookups
+JOBS[12] = JOBS[13] = ("failure", PAST_LIMIT)
+RUNS["o/live"] += [run(12), run(13)]
+FILLER_JOBS = [{"id": 900 + i, "name": f"build / shard {i}", "conclusion": "success"} for i in range(100)]
+FILLER_NOTES = [{"title": "", "message": f"warning {i}"} for i in range(100)]
 calls = []
 
 
@@ -114,14 +124,22 @@ def fake_request(method, path, body=None):
             raise RuntimeError("GET runs -> 502")
         assert "event=pull_request&status=failure&created=%3E%3D2026-11-18" in path, path
         return {"workflow_runs": RUNS[repo]}
-    if path.endswith("/jobs?filter=latest"):
+    path, _, query = path.partition("?")
+    page = int(query.rsplit("page=", 1)[1]) if "page=" in query else 1
+    if path.endswith("/jobs"):
+        assert "filter=latest" in query, query
         rid = int(path.split("/")[-2])
-        return {"jobs": [{"id": 100 + rid, "name": "automerge / automerge", "conclusion": "failure"},
-                         {"id": 200 + rid, "name": "review / review", "conclusion": JOBS[rid][0]}]}
+        jobs = [{"id": 100 + rid, "name": "automerge / automerge", "conclusion": "failure"},
+                {"id": 200 + rid, "name": "review / review", "conclusion": JOBS[rid][0]}]
+        if rid == 12:
+            return {"jobs": FILLER_JOBS if page == 1 else jobs}
+        return {"jobs": jobs}
     if path.endswith("/annotations"):
         rid = int(path.split("/")[-2]) - 200
         if rid == 11:
             raise RuntimeError("GET annotations -> 404")
+        if rid == 13:
+            return FILLER_NOTES if page == 1 else JOBS[rid][1]
         return JOBS[rid][1]
     if "/pulls/" in path:
         return PRS.get(int(path.rsplit("/", 1)[1]), PRS[1])
@@ -134,7 +152,9 @@ with redirect_stdout(out):
     code = exit_code(ul.retry)
 reruns = sorted(int(p.split("/")[-2]) - 200 for m, p in calls if m == "POST")
 report = out.getvalue()
-check("re-runs only open, non-draft, same-head PR runs past their reset (or with no reset time)", reruns == [1, 6])
+check("re-runs only open, non-draft, same-head PR runs past their reset (or with no reset time)",
+      reruns == [1, 6, 12, 13])
+check("a review job or usage-limit annotation on a later page is found", 12 in reruns and 13 in reruns)
 check("only the review job is re-run, not the run's other failed jobs",
       all(p.startswith("/repos/o/live/actions/jobs/2") and p.endswith("/rerun") for m, p in calls if m == "POST"))
 check("a run before its reset waits", "run 2 (aaaaaaa): waiting for the reset at 2026-11-26T18:44Z" in report)
@@ -146,7 +166,7 @@ check("archived repos are not swept", not any("/repos/o/old/" in p for _, p in c
 check("one repo's API error is reported, the others are still swept, and the job fails",
       code == 1 and "o/broken: GET runs -> 502" in report and 1 in reruns)
 check("one run's API error is reported and the repo's other runs are still swept",
-      "o/live run 11: RuntimeError('GET annotations -> 404')" in report and reruns == [1, 6])
+      "o/live run 11: RuntimeError('GET annotations -> 404')" in report and 1 in reruns and 6 in reruns)
 
 pages = {1: [{"full_name": f"o/r{i}"} for i in range(100)], 2: [{"full_name": "o/last"}]}
 ul.request = lambda method, path, body=None: {"repositories": pages[int(path.rsplit("page=", 1)[1])]}
