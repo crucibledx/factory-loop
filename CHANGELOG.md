@@ -5,6 +5,16 @@
 - `implement-spec`: after pushing to a draft PR, poll `gh pr view --json headRefOid` until it shows the pushed
   commit (every few seconds, give up with a clear error after about 60 seconds) before `gh pr ready`. GitHub lags
   after a push; marking ready against a stale head ran the review on the wrong commit.
+- `loop-ci` runs each repo's toolchain, not just Bun (factory-loop#41). A new optional `.factory/toolchain.json`
+  declares the `stack` (`bun`, `go` or `none`), the `os` runners the tests run on, and `checks` commands; without it
+  the stack is inferred as before (`bun.lock` or `package.json` → `bun`, `go.mod` → `go`, otherwise `none`), so a
+  Bun caller keeps its behavior with no edits. A new `resolve` job runs `scripts/toolchain.py`: an input the caller
+  sets wins over the file, which wins over the stack's defaults; an input set to "" skips that check, and
+  multiline commands still work, both as before the resolver. Tests run in one `test-lane (<os>)` per declared
+  runner behind the `ci / test` gate, which fails unless every lane passed. Toolchain setup (Bun, or Go with
+  `GOTOOLCHAIN=local`, `go mod download` and golangci-lint at the repo's `golangci-lint-version` make pin) moves
+  into the composite action `.github/actions/setup-toolchain`, loaded from factory-loop at the new `loop_ref`
+  input (default `v0`).
 
 - `loop-review`: a follow-up review after the PR merged its base branch reviews only the PR's own changes since the
   last review, not the base's commits that the merge brought in (factory-loop#33). It compares the head with the
@@ -12,7 +22,10 @@
   merge conflicts, git is older, or the PR and the base have more than one merge base, the diff is the whole PR (what
   `gh pr diff` shows), the job log says why, and the review context's new `diff_scope` field says `whole_pr`;
   otherwise it is `since_review`. Follow-ups without a base merge are unchanged.
-
+- `loop-review` gives the reviewer the org rules in its prompt (factory-loop#53). They live in
+  `plugins/crucible-loop/skills/engineering-standards/org-rules.md`, which `collect` inlines; the prompt tells the
+  reviewer not to read the private `crucibledx/hq`, whose `AGENTS.md` it could not fetch (HTTP 404). `AGENTS.md`
+  points at the new file instead of hq.
 - `loop-review`: when the head's review run stopped at the Factory usage limit, a gate-only run (a submitted review
   or a thread reply) says "Review stopped at the usage limit; it re-runs after <reset>" with a link to that run,
   instead of "No completed review" (factory-loop#52). When the review run ended otherwise without a review, the gate

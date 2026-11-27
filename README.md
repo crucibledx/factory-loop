@@ -57,7 +57,7 @@ in `crucibledx/assets`.
 | `plugins/crucible-loop/skills/`       | `idea-discovery`, `spec-writer`, `acceptance-contract`, `implement-spec`, `loop-orchestrator`, `engineering-standards` |
 | `plugins/crucible-loop/droids/`       | `researcher`, `spec-reviewer-arch`, `spec-reviewer-product`, `code-reviewer`, `verifier` |
 | `plugins/crucible-loop/hooks/`        | Guard: blocks pushes to `main`, force pushes, and PR merges             |
-| `.github/workflows/loop-*.yml`        | Reusable workflows: review + merge gate, auto-merge on approval, `@droid` mentions, spec merged, org CI for Bun repos (`loop-ci`; `loop-implement` is deprecated) |
+| `.github/workflows/loop-*.yml`        | Reusable workflows: review + merge gate, auto-merge on approval, `@droid` mentions, spec merged, org CI (`loop-ci`; `loop-implement` is deprecated) |
 | `templates/repo/`                     | The thin per-repo files: caller workflows (`crucible-loop.yml`, `ci.yml`), `.factory/settings.json`, `.factory/loop-contract.md` |
 
 ## Add the loop to a repo
@@ -69,10 +69,14 @@ scripts/install.sh ~/crucible/projects/<repo>
 Then edit `.factory/loop-contract.md` with the repo's real check commands. (A `## Loop contract` section in
 `AGENTS.md` also works.)
 
-`.github/workflows/ci.yml` calls `loop-ci`: format, lint, and typecheck scripts that `package.json` defines, `bun test`,
-and an optional build. Set its `with:` inputs for repo-specific commands, and add `ci / quality`, `ci / test` (and
-`ci / build` when `build_command` is set) as required checks on the `main` ruleset. `install.sh` keeps an existing
-`ci.yml`; replace it by hand.
+`.github/workflows/ci.yml` calls `loop-ci`. A repo declares its toolchain in `.factory/toolchain.json`: the `stack`
+(`bun`, `go` or `none`), the `os` runners its tests run on, and `checks` commands. Without the file the stack is
+inferred (`bun.lock` or `package.json` → `bun`, `go.mod` → `go`, otherwise `none`), so a Bun caller keeps its
+behavior with no edits. Quality runs the `format:check lint typecheck` scripts that `package.json` defines for Bun
+repos, or the declared commands. Tests run in one `test-lane (<os>)` per declared runner, and `ci / test` gates on
+every lane, so the required checks stay `ci / quality`, `ci / test` (and `ci / build` when a build command
+resolves). An input the caller sets overrides the declaration. `install.sh` keeps an existing `ci.yml`; replace it
+by hand.
 
 The caller's `review` job skips draft PRs itself, so the required `review / review` check only comes from runs on
 non-draft PRs. `install.sh` keeps an existing `crucible-loop.yml`; in a repo that already has one, add
@@ -88,7 +92,9 @@ The review runs as two jobs. `review / reviewer` (read-only) runs `droid exec` a
 artifact. `review / review`, the required check, holds the write token and never checks out PR code. It rebuilds the
 PR state and open threads from the API, posts the result, and gates. It fails when the run was cancelled or the
 reviewer job did not finish. This repo's own self-review is the exception: it tests the PR's version of the workflow
-and `review/` scripts, so on factory-loop PRs the write job runs the PR's code by design.
+and `review/` scripts, so on factory-loop PRs the write job runs the PR's code by design. The prompt includes the org rules from
+`plugins/crucible-loop/skills/engineering-standards/org-rules.md`, since the reviewer cannot read the private `hq`
+repo.
 
 Secrets, set once:
 
