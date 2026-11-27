@@ -144,8 +144,17 @@ check("quality_scripts on a go repo fails and points at checks.quality",
       code == 1 and "checks.quality" in out and "::error::" in out)
 code, out, o = run({"package.json": "{"})
 check("an unreadable package.json fails and names it", code == 1 and "::error file=package.json::" in out)
-code, out, o = run({"package.json": PKG}, {"TEST_COMMAND": "a\nb"})
-check("a multi-line input fails", code == 1 and "the test_command input must be a one-line command" in out)
+code, out, o = run({"package.json": PKG}, {"TEST_COMMAND": "bun run prepare-tests\nbun test"})
+check("a multi-line caller command is kept, serialized as a block",
+      code == 0 and o["test"] == "bun run prepare-tests\nbun test")
+o = run({"go.mod": "module x\n"}, {"TEST_COMMAND": ""})[2]
+check("an explicit empty test_command skips tests even when the stack has a default", o["test"] == "")
+o = run({"go.mod": "module x\n"}, {"BUILD_COMMAND": ""})[2]
+check("an explicit empty build_command skips the build even when the stack has a default", o["build"] == "")
+o = run({"package.json": PKG}, {"QUALITY_SCRIPTS": ""})[2]
+check("an explicit empty quality_scripts runs no quality checks, as before the resolver", o["quality"] == "")
+o = run({"go.mod": "module x\n", DECL: {"checks": {"test": "go test ./..."}}}, {"TEST_COMMAND": ""})[2]
+check("an explicit empty input also overrides the declaration", o["test"] == "")
 check("annotations escape newlines and percent signs", tc.annotation("50%\nx\r") == "50%25%0Ax%0D")
 
 # The CLI, as the resolve job runs it.
@@ -181,6 +190,8 @@ check("every job that installs uses the setup action from factory-loop at loop_r
 outputs = set(re.findall(r"^([a-z_]+)=", tc.outputs(tc.resolve(repo({}), {})), re.M)) | {"quality"}
 check("every resolver output reaches the resolve job's outputs",
       all(f"{name}: ${{{{ steps.toolchain.outputs.{name} }}}}" in jobs["resolve"] for name in outputs))
+check("the resolve inputs default to the resolver's sentinel",
+      workflow.count("default: toolchain-default") == 3 and tc.INPUT_DEFAULT == "toolchain-default")
 uses = re.findall(r"uses: ([^\s]+)", workflow + action)
 check("every third-party action is pinned to a commit SHA",
       all(re.fullmatch(r"[\w.-]+/[\w.-]+@[0-9a-f]{40}", u) for u in uses if not u.startswith("./")))
@@ -195,6 +206,11 @@ check("the bun setup keeps the callers' version resolution: .bun-version only wh
       and "bun-version-file: ${{ steps.bun-file.outputs.file }}" in action)
 check("the bun install stays conditional on package.json",
       'if [ -f package.json ]; then bun install --frozen-lockfile; else' in action)
+check("go installs golangci-lint from the repo's make pin, only when the repo has one",
+      "make -s golangci-lint-version" in action
+      and "steps.golangci-version.outputs.version != ''" in action
+      and "golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a" in action
+      and "install-only: true" in action)
 
 # The ci / test gate's shell, run with the values the workflow passes it.
 gate = re.search(r"run: \|\n((?:          .+\n?)+)", jobs["test"]).group(1)

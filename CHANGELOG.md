@@ -6,10 +6,12 @@
   declares the `stack` (`bun`, `go` or `none`), the `os` runners the tests run on, and `checks` commands; without it
   the stack is inferred as before (`bun.lock` or `package.json` → `bun`, `go.mod` → `go`, otherwise `none`), so a
   Bun caller keeps its behavior with no edits. A new `resolve` job runs `scripts/toolchain.py`: an input the caller
-  sets wins over the file, which wins over the stack's defaults. Tests run in one `test-lane (<os>)` per declared
+  sets wins over the file, which wins over the stack's defaults; an input set to "" skips that check, and
+  multiline commands still work, both as before the resolver. Tests run in one `test-lane (<os>)` per declared
   runner behind the `ci / test` gate, which fails unless every lane passed. Toolchain setup (Bun, or Go with
-  `GOTOOLCHAIN=local` and `go mod download`) moves into the composite action `.github/actions/setup-toolchain`,
-  loaded from factory-loop at the new `loop_ref` input (default `v0`).
+  `GOTOOLCHAIN=local`, `go mod download` and golangci-lint at the repo's `golangci-lint-version` make pin) moves
+  into the composite action `.github/actions/setup-toolchain`, loaded from factory-loop at the new `loop_ref`
+  input (default `v0`).
 
 - `loop-review`: a follow-up review after the PR merged its base branch reviews only the PR's own changes since the
   last review, not the base's commits that the merge brought in (factory-loop#33). It compares the head with the

@@ -45,6 +45,22 @@ runs:
       uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
       with:
         go-version-file: go.mod
+    # Go repos lint with golangci-lint (org standards); the version is the repo's pin, as in its own CI.
+    - id: golangci-version
+      if: inputs.stack == 'go'
+      shell: bash
+      run: |
+        version=$(make -s golangci-lint-version 2>/dev/null || true)
+        if [ -z "$version" ]; then
+          echo "::notice::No golangci-lint-version make target; golangci-lint not installed."
+        else
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+        fi
+    - if: inputs.stack == 'go' && steps.golangci-version.outputs.version != ''
+      uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+      with:
+        version: ${{ steps.golangci-version.outputs.version }}
+        install-only: true
     # local: build with the go.mod version setup-go installed, never a toolchain go.mod would download.
     - if: inputs.stack == 'go'
       shell: bash

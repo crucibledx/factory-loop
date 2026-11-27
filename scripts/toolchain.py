@@ -16,6 +16,9 @@ import sys
 import uuid
 
 DECLARATION = os.path.join(".factory", "toolchain.json")
+# The loop-ci inputs' default: not set by the caller, so the declaration and the stack's defaults decide. An input
+# set to "" skips that check, as it did before the resolver existed. The value matches the defaults in loop-ci.yml.
+INPUT_DEFAULT = "toolchain-default"
 DEFAULT_OS = ["ubuntu-latest"]
 MAX_OS = 8
 RUNNER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
@@ -55,9 +58,11 @@ def read_json(path):
         raise Invalid(f"cannot read it as JSON: {err}") from None
 
 
-def command(value, where):
-    if not isinstance(value, str) or "\n" in value or "\r" in value:
-        raise Invalid(f"{where} must be a one-line command string")
+def command(value, where, multiline=False):
+    bad = "\r" in value if isinstance(value, str) else True
+    if bad or (not multiline and "\n" in value):
+        shape = "a command string" if multiline else "a one-line command string"
+        raise Invalid(f"{where} must be {shape}")
     return value.strip()
 
 
@@ -126,13 +131,16 @@ def resolve(repo, env):
     if stack == "bun" and scripts is None:
         notices.append("No package.json, so no package scripts or default tests to run.")
 
-    names = env.get("QUALITY_SCRIPTS", "").split()
-    if names and stack != "bun":
+    scripts_input = env.get("QUALITY_SCRIPTS", INPUT_DEFAULT)
+    if scripts_input not in (INPUT_DEFAULT, "") and stack != "bun":
         raise Invalid(f"quality_scripts names package.json scripts, which the {stack} stack has none of; "
                       f"set checks.quality in {DECLARATION} instead")
-    if names or ("quality" not in checks and "quality_scripts" in profile):
+    if scripts_input == "":
+        quality = []  # an explicit empty quality_scripts runs no quality checks, as before the resolver
+    elif scripts_input != INPUT_DEFAULT or ("quality" not in checks and "quality_scripts" in profile):
         quality = []
-        for name in names or profile["quality_scripts"]:
+        names = scripts_input.split() if scripts_input != INPUT_DEFAULT else profile["quality_scripts"]
+        for name in names:
             if scripts and name in scripts:
                 quality.append(f"bun run {shlex.quote(name)}")
             elif scripts is not None:
@@ -141,12 +149,13 @@ def resolve(repo, env):
         quality = checks.get("quality", profile.get("quality", []))
 
     def pick(key, env_name):
-        given = command(env.get(env_name, ""), f"the {env_name.lower()} input")
-        if given:
-            return given
-        if key in checks:
-            return checks[key]
-        return "" if stack == "bun" and scripts is None else profile[key]
+        raw = env.get(env_name, INPUT_DEFAULT)
+        if raw == INPUT_DEFAULT:
+            if key in checks:
+                return checks[key]
+            return "" if stack == "bun" and scripts is None else profile[key]
+        # An input the caller sets wins, multiline commands included; set to "" it skips the check, as before.
+        return command(raw, f"the {env_name.lower()} input", multiline=True)
 
     test, build = pick("test", "TEST_COMMAND"), pick("build", "BUILD_COMMAND")
     if not quality and not test and not build:
@@ -168,10 +177,14 @@ def outputs(resolved):
         f"stack={resolved['stack']}\n",
         f"os={json.dumps(resolved['os'])}\n",
         f"multi_os={'true' if len(resolved['os']) > 1 else 'false'}\n",
-        f"quality<<{delim}\n" + "".join(f"{c}\n" for c in resolved["quality"]) + f"{delim}\n",
-        f"test={resolved['test']}\n",
-        f"build={resolved['build']}\n",
+        block("quality", "\n".join(resolved["quality"]), delim),
+        block("test", resolved["test"], f"{delim}_T"),
+        block("build", resolved["build"], f"{delim}_B"),
     ])
+
+
+def block(name, value, delim):
+    return f"{name}<<{delim}\n{value}\n{delim}\n" if value else f"{name}=\n"
 
 
 def main(argv, env):
