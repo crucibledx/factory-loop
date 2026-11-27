@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- `implement-spec`: after pushing to a draft PR, poll `gh pr view --json headRefOid` until it shows the pushed
+  commit (every few seconds, give up with a clear error after about 60 seconds) before `gh pr ready`. GitHub lags
+  after a push; marking ready against a stale head ran the review on the wrong commit.
 - `loop-ci` runs each repo's toolchain, not just Bun (factory-loop#41). A new optional `.factory/toolchain.json`
   declares the `stack` (`bun`, `go` or `none`), the `os` runners the tests run on, and `checks` commands; without it
   the stack is inferred as before (`bun.lock` or `package.json` → `bun`, `go.mod` → `go`, otherwise `none`), so a
