@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- factory-loop checks itself in CI: the new `checks` job (`self-checks.yml`) runs `scripts/check.sh` (every
+  `scripts/test-*`, a pinned and checksum-verified `actionlint`, and every tracked JSON file) on each PR and on `main`,
+  read-only and without secrets. `scripts/test-review.py` no longer depends on inherited `GITHUB_*` and `LOOP_*`
+  variables, so it also passes inside Actions jobs and under the hosted reviewer.
 - `engineering-standards` holds Go to the same structure bar as TypeScript (implement and review stages): a
   domain-driven layout (context packages without I/O, thin adapters, imports pointing inward), soft size limits for
   files, functions and packages with their review severity, refactoring rules (when to extract a package, consumer-side
