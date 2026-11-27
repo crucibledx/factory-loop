@@ -7,8 +7,7 @@ import tempfile
 import types
 
 # The same results locally, in an Actions job and under the hosted reviewer: nothing loop_review reads is inherited.
-for name in ("GITHUB_API_URL", "GITHUB_RUN_ID", "GITHUB_STEP_SUMMARY", "LOOP_REVIEW_DIR", "LOOP_REVIEWER_LOGIN",
-             "LOOP_REVIEW_PROMPT", "LOOP_STANDARDS", "LOOP_RUN_CHECKS", "EVENT_NAME", "BLOCKING_SEVERITIES"):
+for name in [k for k in os.environ if k.startswith(("GITHUB_", "LOOP_"))] + ["EVENT_NAME", "BLOCKING_SEVERITIES"]:
     os.environ.pop(name, None)
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "review"))
