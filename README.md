@@ -80,8 +80,15 @@ non-draft PRs. `install.sh` keeps an existing `crucible-loop.yml`; in a repo tha
 
 `loop-review` reviews without running the repo's code by default. With `run_checks: true` in the caller's `review` job,
 it installs Bun and the dependencies (when the repo has `bun.lock`) and `actionlint` (when the loop contract lists it),
-and the reviewer runs the loop contract's checks. That runs PR code in a job holding `FACTORY_API_KEY` and a write
-token, so turn it on only in repos where every PR author is trusted.
+and the reviewer runs the loop contract's checks. That runs PR code in the `review / reviewer` job. That job has no
+write token, but it holds `FACTORY_API_KEY` and writes the `result.json` that the `review / review` job posts and
+gates on, so turn it on only in repos where every PR author is trusted.
+
+The review runs as two jobs. `review / reviewer` (read-only) runs `droid exec` and uploads its `result.json` as an
+artifact. `review / review`, the required check, holds the write token and never checks out PR code. It rebuilds the
+PR state and open threads from the API, posts the result, and gates. It fails when the run was cancelled or the
+reviewer job did not finish. This repo's own self-review is the exception: it tests the PR's version of the workflow
+and `review/` scripts, so on factory-loop PRs the write job runs the PR's code by design.
 
 Secrets, set once:
 
@@ -109,10 +116,11 @@ Free plan have no rulesets or auto-merge; merge those by hand.
 ## Review at the usage limit
 
 The hosted review runs `droid exec` on the same Factory plan as the workstreams. When the plan's usage limit stops
-the reviewer, the `review / review` check stays red (the commit has no review), but the job reports it as a
-"Review usage limit" error with the reset time, not as a review failure. `loop-review-retry` runs in this repo every
-30 minutes as the `crucible-smith` app: it re-runs those review jobs in every repo the app is installed on, once the
-limit has reset, while the PR is open, not a draft, and still at the same commit. Re-run the job by hand to go sooner.
+the reviewer, the `review / review` check stays red (the commit has no review), but the `review / reviewer` job
+reports it as a "Review usage limit" error with the reset time, not as a review failure. `loop-review-retry` runs in
+this repo every 30 minutes as the `crucible-smith` app: it re-runs those reviewer jobs (and with them the gate) in
+every repo the app is installed on, once the limit has reset, while the PR is open, not a draft, and still at the same
+commit. To go sooner, re-run the `review / reviewer` job by hand; re-running only `review / review` fails again.
 It needs the `SMITH_CLIENT_ID` variable and `SMITH_PRIVATE_KEY` secret on this repo, and the app's installation needs
 Actions write, Checks read (to read the job's annotations) and Pull requests read.
 
