@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v0.8.1 - 2026-11-27
+
 - `loop-ci`'s quality, test and build jobs and `loop-mention`/`loop-implement` move the `.factory-loop`
   checkout aside instead of deleting it, and restore it as the job's last step (always, once the move succeeded):
   the runner re-resolves the local composite action for its post phase (setup-bun's cache-save), so deleting it
