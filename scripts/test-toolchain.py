@@ -85,10 +85,15 @@ check("a repo with neither infers none and passes with a notice",
 check("package.json wins over go.mod, as loop-ci ran Bun before",
       run({"package.json": PKG, "go.mod": "module x\n"})[2]["stack"] == "bun")
 code, out, o = run({DECL: {"stack": "assets"}})
-check("the assets stack optimizes SVGs and fails on the diff, with no test or build",
+check("the assets stack optimizes SVGs, fails on the diff and checks LFS tracking, with no test or build",
       code == 0 and o["stack"] == "assets"
-      and o["quality"] == "sh scripts/optimize-svgs.sh\ngit diff --exit-code"
+      and o["quality"] == "bash scripts/optimize-svgs.sh\ngit diff --exit-code\nbash scripts/check-lfs.sh"
       and o["test"] == "" and o["build"] == "")
+# The scripts have a bash shebang and bashisms; the runner's sh (dash) would fail them. Run the resolved command.
+svg_repo = repo({"scripts/optimize-svgs.sh": "#!/usr/bin/env bash\nset -euo pipefail\ns=x; [[ $s == x ]]\n"})
+line1 = o["quality"].splitlines()[0]
+done = subprocess.run(["bash", "-eo", "pipefail", "-c", line1], cwd=svg_repo, capture_output=True, text=True)
+check("the resolved optimizer command runs a bash-only script", done.returncode == 0 and line1.startswith("bash "))
 
 # The slack-bridge caller: its inputs give the same commands as before.
 code, out, o = run({"package.json": PKG, "bun.lock": ""}, {"TEST_COMMAND": "bun test", "BUILD_COMMAND": "bun run build"})
