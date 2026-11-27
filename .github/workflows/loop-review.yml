@@ -73,7 +73,6 @@ jobs:
       HEAD_SHA: ${{ github.event.pull_request.head.sha }}
       EVENT_NAME: ${{ github.event_name }}
       LOOP_REVIEW_DIR: ${{ github.workspace }}/.loop-review
-      LOOP_STANDARDS: ${{ github.workspace }}/.factory-loop/plugins/crucible-loop/skills/engineering-standards/SKILL.md
       LOOP_REVIEW_PROMPT: ${{ github.workspace }}/.factory-loop/review/prompt.md
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -90,6 +89,7 @@ jobs:
       - id: collect
         env:
           LOOP_RUN_CHECKS: ${{ inputs.run_checks }}
+          LOOP_STANDARDS: ${{ runner.temp }}/factory-loop/plugins/crucible-loop/skills/engineering-standards/SKILL.md
         run: echo "mode=$(python3 .factory-loop/review/loop_review.py collect)" >> "$GITHUB_OUTPUT"
       # run_checks: the repo's toolchain, so the reviewer can run the checks in its loop contract (collect puts the
       # permission in the prompt). A failed install never blocks the review; the reviewer is told.
@@ -134,6 +134,10 @@ jobs:
         run: |
           printf '\nA toolchain install failed on this runner. Report checks it breaks as could not run, never as findings.\n' \
             >> "$LOOP_REVIEW_DIR/prompt.md"
+      - name: Move the factory-loop checkout out of the workspace
+        # The reviewer runs the repo's own checks; a tree-wide check must not see factory-loop's files.
+        if: steps.collect.outputs.mode != 'gate'
+        run: mv .factory-loop "$RUNNER_TEMP/factory-loop"
       - name: Review
         if: steps.collect.outputs.mode != 'gate'
         env:
@@ -152,7 +156,7 @@ jobs:
           set -e
           if [ "$status" -ne 0 ]; then
             # A usage-limit stop is marked so it reads as one, and so loop-review-retry.yml re-runs it after the reset.
-            python3 .factory-loop/review/usage_limit.py note "$log" || true
+            python3 "$RUNNER_TEMP/factory-loop/review/usage_limit.py" note "$log" || true
             exit "$status"
           fi
       - name: Upload the review
