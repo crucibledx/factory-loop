@@ -54,9 +54,13 @@ runs:
       uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
       with:
         go-version-file: go.mod
-    # Go repos lint with golangci-lint (org standards); the version is the repo's pin, as in its own CI.
+    # Go repos lint with golangci-lint (org standards); the version is the repo's pin, as in its own CI. Under
+    # ignore-scripts the checkout is untrusted, so its Makefile never runs and golangci-lint is not installed.
+    - if: inputs.stack == 'go' && inputs.ignore-scripts == 'true'
+      shell: bash
+      run: echo "::notice::ignore-scripts: skipping the Makefile's golangci-lint pin; golangci-lint not installed."
     - id: golangci-version
-      if: inputs.stack == 'go'
+      if: inputs.stack == 'go' && inputs.ignore-scripts != 'true'
       shell: bash
       run: |
         version=$(make -s golangci-lint-version 2>/dev/null || true)

@@ -266,9 +266,15 @@ check("the review's run_checks resolves and sets up the repo's toolchain, never 
       "setup-bun" not in reviewer and "python3 .factory-loop/scripts/toolchain.py" in reviewer
       and "uses: ./.factory-loop/.github/actions/setup-toolchain" in reviewer
       and 'ignore-scripts: "true"' in reviewer)
+resolve_step = reviewer.split("name: Resolve the toolchain", 1)[1].split("\n      - ", 1)[0]
+setup_step = reviewer.split("name: Set up the toolchain", 1)[1].split("\n      - ", 1)[0]
 check("a failed toolchain install is still noted, never fatal",
       "steps.toolchain.outcome == 'failure'" in reviewer and "steps.setup.outcome == 'failure'" in reviewer
-      and "continue-on-error: true" in reviewer and "actionlint" in reviewer)
+      and "continue-on-error: true" in resolve_step and "continue-on-error: true" in setup_step
+      and "actionlint" in reviewer)
+check("under ignore-scripts the go pin's Makefile never runs, so review setup executes no PR code",
+      "if: inputs.stack == 'go' && inputs.ignore-scripts != 'true'" in action
+      and "ignore-scripts: skipping the Makefile" in action)
 for name in ("loop-mention.yml", "loop-implement.yml"):
     wf = open(os.path.join(ROOT, ".github", "workflows", name), encoding="utf-8").read()
     check(f"{name} sets up the resolved toolchain from factory-loop at loop_ref, not always Bun",

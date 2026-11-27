@@ -8,6 +8,7 @@ import sys
 import tempfile
 import types
 from contextlib import redirect_stderr, redirect_stdout
+from unittest import mock
 
 # The same results locally, in an Actions job and under the hosted reviewer: nothing loop_review reads is inherited.
 for name in [k for k in os.environ if k.startswith(("GITHUB_", "LOOP_"))] + ["EVENT_NAME", "BLOCKING_SEVERITIES"]:
@@ -544,6 +545,25 @@ check("run_checks allows the loop contract's checks instead",
 check("the run_checks prompt names the resolved toolchain",
       "The resolved toolchain (from .factory/toolchain.json or the repo's files):" in checks_prompt
       and "Stack:" in checks_prompt and "test:" in checks_prompt)
+
+
+class FakeProc:
+    def __init__(self, returncode=0, stdout="", stderr=""):
+        self.returncode, self.stdout, self.stderr = returncode, stdout, stderr
+
+
+with mock.patch.object(lr.subprocess, "run", return_value=FakeProc(1, "stack must be one of x")):
+    failed_prompt = lr.render_prompt("full", run_checks=True)
+check("a failed resolution is reported in the prompt, never fatal",
+      "The toolchain could not be resolved: stack must be one of x" in failed_prompt)
+with mock.patch.object(lr.subprocess, "run", side_effect=subprocess.TimeoutExpired("toolchain.py", 30)):
+    timeout_prompt = lr.render_prompt("full", run_checks=True)
+check("a resolution timeout is reported in the prompt, never fatal",
+      "could not be resolved" in timeout_prompt)
+with mock.patch.object(lr.subprocess, "run", side_effect=OSError("no python")):
+    oserror_prompt = lr.render_prompt("full", run_checks=True)
+check("a resolution that cannot start is reported in the prompt, never fatal",
+      "could not be resolved" in oserror_prompt)
 check("no placeholder is left in either prompt", "{{" not in default_prompt + checks_prompt)
 org_rules = open(lr.ORG_RULES_PATH, encoding="utf-8").read().strip()
 check("both prompts carry the org rules, so the reviewer needs nothing from the private hq repo",

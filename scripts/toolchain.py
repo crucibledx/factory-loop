@@ -4,9 +4,10 @@
 The declaration is `.factory/toolchain.json`; without one the stack is inferred from the repo's files. A caller's
 loop-ci inputs (QUALITY_SCRIPTS, TEST_COMMAND, BUILD_COMMAND in the environment) override the declaration, and the
 declaration overrides the stack's defaults. Writes the result to $GITHUB_OUTPUT (stdout when it is unset); exits 1
-with an ::error line when the declaration is invalid.
+with an ::error line when the declaration is invalid (in --describe mode the message is plain, for the review
+prompt).
 
-Usage: toolchain.py [repo dir]
+Usage: toolchain.py [--describe] [repo dir]
 """
 import json
 import os

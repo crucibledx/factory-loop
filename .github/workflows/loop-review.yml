@@ -40,8 +40,9 @@ on:
         default: v0
       run_checks:
         description: >-
-          Install the repo's toolchain (Bun and dependencies when it has bun.lock, actionlint when its loop contract
-          lists it) and let the reviewer run the loop contract's checks. This runs PR code in the reviewer job, which
+          Resolve the repo's toolchain (.factory/toolchain.json, else Bun or Go inferred from its files) and install
+          it without running repository code, then let the reviewer run the resolved loop-contract checks. This runs
+          PR code in the reviewer job, which
           has no write token but holds FACTORY_API_KEY and writes the result the gate acts on, so enable it only where
           every PR author is trusted.
         type: boolean
