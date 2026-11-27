@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- `loop-ci`'s quality, test and build jobs and `loop-mention`/`loop-implement` move the `.factory-loop`
+  checkout aside instead of deleting it, and restore it as the job's last step (always, once the move succeeded):
+  the runner re-resolves the local composite action for its post phase (setup-bun's cache-save), so deleting it
+  failed every job's cleanup with "Can't find 'action.yml'" (found in crucibledx/assets#34's CI). The quality
+  job's move is skipped when no quality commands resolve, and `loop-review` restores its moved copy too. The
+  repo's checks still never see factory-loop's files.
+
 ## v0.8.0 - 2026-11-27
 
 - The repo template and the loop's docs catch up with the toolchain file (factory-loop#41): the template ships

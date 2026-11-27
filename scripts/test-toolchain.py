@@ -304,18 +304,54 @@ implement = open(os.path.join(ROOT, ".github", "workflows", "loop-implement.yml"
 check("setup_bun stays as a deprecated input that gates only the bun stack",
       "setup_bun:" in implement and "Deprecated." in implement
       and "steps.toolchain.outputs.stack != 'bun' || inputs.setup_bun" in implement)
+ASIDE = 'run: mv .factory-loop "$RUNNER_TEMP/factory-loop"'
+BACK = 'run: mv "$RUNNER_TEMP/factory-loop" .factory-loop'
 ci_wf = open(os.path.join(ROOT, ".github", "workflows", "loop-ci.yml"), encoding="utf-8").read()
-rms = [i for i in range(len(ci_wf)) if ci_wf.startswith("run: rm -rf .factory-loop", i)]
+asides = [i for i in range(len(ci_wf)) if ci_wf.startswith(ASIDE, i)]
+restores = [i for i in range(len(ci_wf)) if ci_wf.startswith(BACK, i)]
 setups = [i for i in range(len(ci_wf)) if ci_wf.startswith("uses: ./.factory-loop/.github/actions/setup-toolchain", i)]
 cmds = [ci_wf.index(m) for m in ('done <<< "$QUALITY"', 'bash -eo pipefail -c "$TEST_COMMAND"',
                                  'bash -eo pipefail -c "$BUILD_COMMAND"')]
-check("every ci job removes .factory-loop after its setup and before the repo's commands",
-      len(rms) == 3 and len(setups) == 3 and all(s < r < c for s, r, c in zip(setups, rms, cmds)))
+GATED = "- name: Restore the factory-loop checkout\n        if: always() && steps.factory-loop-aside.outcome == 'success'"
+check("every ci job moves .factory-loop aside after its setup and restores it after the repo's commands",
+      len(asides) == 3 and len(restores) == 3 and len(setups) == 3
+      and all(s < a < c < r for s, a, c, r in zip(setups, asides, cmds, restores))
+      and ci_wf.count(GATED) == 3 and ci_wf.count("id: factory-loop-aside") == 3)
+# The quality job skips checkout and setup when no quality commands resolve; its aside carries the same
+# condition, so an empty-quality repo passes with the notice instead of failing the mv.
+quality_region = ci_wf[:ci_wf.index('done <<< "$QUALITY"')]
+aside_step = quality_region[quality_region.rindex("- name: Move the factory-loop checkout aside"):]
+check("the quality aside is skipped when no quality commands resolve",
+      "if: needs.resolve.outputs.quality != ''" in aside_step)
 for name in ("loop-mention.yml", "loop-implement.yml"):
     wf = open(os.path.join(ROOT, ".github", "workflows", name), encoding="utf-8").read()
-    check(f"{name} removes .factory-loop after its setup and before droid-action",
-          wf.index("setup-toolchain") < wf.index("run: rm -rf .factory-loop")
-          < wf.index("Factory-AI/droid-action"))
+    check(f"{name} moves .factory-loop aside before droid-action and restores it after",
+          wf.index("setup-toolchain") < wf.index(ASIDE)
+          < wf.index("Factory-AI/droid-action") < wf.index(BACK)
+          and GATED in wf and wf.count("id: factory-loop-aside") == 1)
+review_wf = open(os.path.join(ROOT, ".github", "workflows", "loop-review.yml"), encoding="utf-8").read()
+check("loop-review restores its moved checkout after the upload, gated on a successful move",
+      review_wf.index(ASIDE) < review_wf.index("Upload the review") < review_wf.index(BACK)
+      and GATED in review_wf and review_wf.count("id: factory-loop-aside") == 1)
+
+
+def last_step(text, idx):
+    """After the restore's run line, the next meaningful line is a job key (two-space indent) or the file ends;
+    a step line (deeper indent) means something was appended after the restore."""
+    for line in text[text.index("\n", idx) + 1:].splitlines():
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        return line.startswith("  ") and not line.startswith("   ")
+    return True
+
+
+check("each restore is its job's last step",
+      all(last_step(ci_wf, r) for r in restores)
+      and all(last_step(wf, wf.index(BACK)) for wf in (
+          open(os.path.join(ROOT, ".github", "workflows", n), encoding="utf-8").read()
+          for n in ("loop-mention.yml", "loop-implement.yml", "loop-review.yml"))))
+check("last_step rejects a blank-line-separated step after the restore",
+      not last_step(BACK + '\n\n      - run: prettier --check .\n', 0))
 
 # install.sh never installs an active declaration: a copied toolchain.json would override inference.
 install = open(os.path.join(ROOT, "scripts", "install.sh"), encoding="utf-8").read()
