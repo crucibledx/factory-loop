@@ -1,0 +1,9 @@
+{
+  "stack": "go",
+  "os": ["ubuntu-latest", "macos-latest", "windows-latest"],
+  "checks": {
+    "quality": ["make lint"],
+    "test": "make test",
+    "build": "make build"
+  }
+}

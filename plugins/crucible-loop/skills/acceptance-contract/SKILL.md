@@ -25,7 +25,7 @@ Cover, at minimum:
 
 | Check type     | Use for                         | Example                                                    |
 |----------------|---------------------------------|------------------------------------------------------------|
-| `test`         | logic, parsing, domain rules    | `bun test test/compiler/merge.test.ts`                     |
+| `test`         | logic, parsing, domain rules    | per stack: `bun test test/compiler/merge.test.ts` (bun), `go test ./...` (go), `bash scripts/check-lfs.sh` (assets) |
 | `cli snapshot` | CLI output and exit codes       | `forge sync --dry-run` in a fixture repo, compare snapshot |
 | `e2e`          | multi-step flows on a real repo | e2e framework scenario name                                |
 | `screenshot`   | web pages                       | page URL + viewport, captured in the PR                    |

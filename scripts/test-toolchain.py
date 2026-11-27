@@ -317,4 +317,19 @@ for name in ("loop-mention.yml", "loop-implement.yml"):
           wf.index("setup-toolchain") < wf.index("run: rm -rf .factory-loop")
           < wf.index("Factory-AI/droid-action"))
 
+# install.sh never installs an active declaration: a copied toolchain.json would override inference.
+install = open(os.path.join(ROOT, "scripts", "install.sh"), encoding="utf-8").read()
+check("install.sh never installs a toolchain.json (a declaration overrides inference)",
+      "copy .factory/toolchain.json" not in install)
+
+# The repo template's shipped examples resolve as the README documents them.
+for name, want_stack, want in [
+    ("toolchain.bun.example.json", "bun", {"quality": "", "test": "bun test", "build": "bun run build"}),
+    ("toolchain.go.example.json", "go", {"quality": "make lint", "test": "make test", "build": "make build"}),
+]:
+    example = json.loads(open(os.path.join(ROOT, "templates", "repo", ".factory", name), encoding="utf-8").read())
+    code, _, o = run({DECL: example})
+    check(f"the template's {name} resolves to its documented {want_stack} commands",
+          code == 0 and o["stack"] == want_stack and all(o[k] == v for k, v in want.items()))
+
 sys.exit(1 if failures else 0)

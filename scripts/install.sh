@@ -20,3 +20,5 @@ if [ ! -d "$repo/specs" ]; then
   echo "added  specs/README.md"
 fi
 echo "todo   edit .factory/loop-contract.md with this repo's real commands"
+echo "       to declare the toolchain, copy a templates/repo/.factory/toolchain.*.example.json from"
+echo "       factory-loop to .factory/toolchain.json and edit it (without the file the stack is inferred)"

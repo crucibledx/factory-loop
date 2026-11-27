@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- The repo template and the loop's docs catch up with the toolchain file (factory-loop#41): the template ships
+  `toolchain.bun.example.json` and `toolchain.go.example.json` (`install.sh` never installs a declaration,
+  since one overrides inference, but points at the examples), the loop contract template points at the resolved
+  commands instead of naming Bun ones, the `acceptance-contract` skill's test example covers each stack, the
+  `verifier` droid notes the declaration, the `ci.yml` template says when `ci / build` is required, and the
+  README gains the per-repo migration notes. `test-toolchain.py` resolves both shipped examples.
+
 - The toolchain resolver and the setup action know an `assets` stack (factory-loop#41): Bun for `bunx svgo` and a
   Git LFS pull, with `bash scripts/optimize-svgs.sh`, a `git diff --exit-code` gate and `bash
   scripts/check-lfs.sh` as quality and no test or build. Declared only, never inferred.

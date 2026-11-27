@@ -58,7 +58,7 @@ in `crucibledx/assets`.
 | `plugins/crucible-loop/droids/`       | `researcher`, `spec-reviewer-arch`, `spec-reviewer-product`, `code-reviewer`, `verifier` |
 | `plugins/crucible-loop/hooks/`        | Guard: blocks pushes to `main`, force pushes, and PR merges             |
 | `.github/workflows/loop-*.yml`        | Reusable workflows: review + merge gate, auto-merge on approval, `@droid` mentions, spec merged, org CI (`loop-ci`; `loop-implement` is deprecated) |
-| `templates/repo/`                     | The thin per-repo files: caller workflows (`crucible-loop.yml`, `ci.yml`), `.factory/settings.json`, `.factory/loop-contract.md` |
+| `templates/repo/`                     | The thin per-repo files: caller workflows (`crucible-loop.yml`, `ci.yml`), `.factory/settings.json`, `.factory/loop-contract.md`, and `toolchain.*.example.json` declarations |
 
 ## Add the loop to a repo
 
@@ -67,7 +67,9 @@ scripts/install.sh ~/crucible/projects/<repo>
 ```
 
 Then edit `.factory/loop-contract.md` with the repo's real check commands. (A `## Loop contract` section in
-`AGENTS.md` also works.)
+`AGENTS.md` also works.) To declare the toolchain, copy a `templates/repo/.factory/toolchain.*.example.json`
+to `.factory/toolchain.json` and edit it; `install.sh` never adds the file itself, because a declaration
+overrides inference.
 
 `.github/workflows/ci.yml` calls `loop-ci`. A repo declares its toolchain in `.factory/toolchain.json`: the `stack`
 (`bun`, `go`, `assets` or `none`), the `os` runners its tests run on, and `checks` commands. Without the file the stack is
@@ -88,6 +90,20 @@ Bun repo, Go with modules and golangci-lint for a Go repo, Bun and Git LFS objec
 lifecycle scripts) and `actionlint` (when the loop contract lists it), and the reviewer runs the loop contract's checks. The prompt names the resolved stack and commands. That runs PR code in the `review / reviewer` job. That job has no
 write token, but it holds `FACTORY_API_KEY` and writes the `result.json` that the `review / review` job posts and
 gates on, so turn it on only in repos where every PR author is trusted.
+
+### Migration notes
+
+What each repo does to come onto the toolchain file:
+
+- **tundish:** nothing; the `bun` stack is inferred.
+- **forge-cli:** nothing until it turns on review `run_checks`; then it declares a file matching its stack.
+- **ember:** declares `stack: go` and its runners; its `go.yml`'s CI jobs can move to a `loop-ci` caller once
+  the declared commands cover everything they run today (vet, e2e, generation checks) — the manual release job
+  stays, and the required check names change, so the ruleset needs updating the day it flips.
+- **web:** its `ci.yml` becomes a `loop-ci` caller with a build command; the ruleset's required names change.
+- **assets:** declares `stack: assets` and adds a `loop-ci` caller (crucibledx/assets#34); the required checks
+  become `ci / quality` and `ci / test`.
+- **hq**, **forge-skills-starter:** nothing (`none`).
 
 The review runs as two jobs. `review / reviewer` (read-only) runs `droid exec` and uploads its `result.json` as an
 artifact. `review / review`, the required check, holds the write token and never checks out PR code. It rebuilds the
