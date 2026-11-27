@@ -58,8 +58,15 @@ def too_deep(text):
             if depth > MAX_DEPTH:
                 return True
         elif ch in "]}":
-            depth -= 1
+            depth = max(depth - 1, 0)
     return False
+
+
+def parse_int(digits):
+    """int() with the 4300-digit limit of Python 3.11+ on every version; 3.9 has none and is slow on long numbers."""
+    if len(digits) > 4300:
+        raise ValueError("integer too long")
+    return int(digits)
 
 
 def at_time(entry):
@@ -116,7 +123,7 @@ def load_entries(path, warn=None):
             reason = "nested too deep"
         else:
             try:
-                entry = json.loads(text)
+                entry = json.loads(text, parse_int=parse_int)
             except ValueError:
                 entry = None
             reason = "not a JSON object" if not isinstance(entry, dict) else invalid_reason(entry)

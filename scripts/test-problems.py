@@ -134,13 +134,17 @@ with tempfile.TemporaryDirectory() as tmp:
     nested = os.path.join(tmp, "nested.jsonl")
     with open(nested, "w", encoding="utf-8") as fh:
         for name, extra in (("at-limit", "[" * 31 + "]" * 31), ("over-limit", "[" * 32 + "]" * 32),
-                            ("brackets-in-string", json.dumps("[{" * 100 + '\\"[[' * 50))):
+                            ("brackets-in-string", json.dumps("[{" * 100 + '\\"[[' * 50)),
+                            ("backslash-then-deep", '"x\\\\", "deep": ' + "[" * 32 + "]" * 32),
+                            ("long-int", "9" * 4300), ("too-long-int", "9" * 4301)):
             fh.write(json.dumps(problem(name=name))[:-1] + ', "extra": ' + extra + "}\n")
     warnings = []
     got = pr.load_entries(nested, warn=warnings.append)
-    check("nesting is limited to 32 levels; brackets inside strings do not count",
-          [e["name"] for e in got] == ["at-limit", "brackets-in-string"]
-          and len(warnings) == 1 and warnings[0].endswith(":2: nested too deep, line skipped"))
+    check("nesting is limited to 32 levels; brackets inside strings do not count, an escaped backslash ends no string",
+          [e["name"] for e in got] == ["at-limit", "brackets-in-string", "long-int"]
+          and [w.split(": ", 1)[1] for w in warnings] == ["nested too deep, line skipped"] * 2
+          + ["not a JSON object, line skipped"]
+          and warnings[1].endswith(":4: nested too deep, line skipped"))
     r = run(os.path.join(tmp, "nope"))
     check("a missing file exits 0 with no output", r.returncode == 0 and r.stdout == "")
     r = run(tmp)
