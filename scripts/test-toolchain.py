@@ -299,5 +299,17 @@ implement = open(os.path.join(ROOT, ".github", "workflows", "loop-implement.yml"
 check("setup_bun stays as a deprecated input that gates only the bun stack",
       "setup_bun:" in implement and "Deprecated." in implement
       and "steps.toolchain.outputs.stack != 'bun' || inputs.setup_bun" in implement)
+ci_wf = open(os.path.join(ROOT, ".github", "workflows", "loop-ci.yml"), encoding="utf-8").read()
+rms = [i for i in range(len(ci_wf)) if ci_wf.startswith("run: rm -rf .factory-loop", i)]
+setups = [i for i in range(len(ci_wf)) if ci_wf.startswith("uses: ./.factory-loop/.github/actions/setup-toolchain", i)]
+cmds = [ci_wf.index(m) for m in ('done <<< "$QUALITY"', 'bash -eo pipefail -c "$TEST_COMMAND"',
+                                 'bash -eo pipefail -c "$BUILD_COMMAND"')]
+check("every ci job removes .factory-loop after its setup and before the repo's commands",
+      len(rms) == 3 and len(setups) == 3 and all(s < r < c for s, r, c in zip(setups, rms, cmds)))
+for name in ("loop-mention.yml", "loop-implement.yml"):
+    wf = open(os.path.join(ROOT, ".github", "workflows", name), encoding="utf-8").read()
+    check(f"{name} removes .factory-loop after its setup and before droid-action",
+          wf.index("setup-toolchain") < wf.index("run: rm -rf .factory-loop")
+          < wf.index("Factory-AI/droid-action"))
 
 sys.exit(1 if failures else 0)

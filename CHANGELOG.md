@@ -5,7 +5,9 @@
 - The toolchain resolver and the setup action know an `assets` stack (factory-loop#41): Bun for `bunx svgo` and a
   Git LFS pull, with `sh scripts/optimize-svgs.sh` plus a `git diff --exit-code` quality gate and no test or
   build. Declared only, never inferred.
-
+- `loop-ci`'s quality, test and build jobs, `loop-mention`, `loop-implement` and `loop-review`'s run_checks remove
+  the `.factory-loop` checkout (moved aside in the review) before the repo's own commands run: a tree-wide check such
+  as `prettier --check .` no longer fails on factory-loop's files (found in crucibledx/tundish#17's CI).
 
 - `loop-review`'s `run_checks`, `loop-mention` and `loop-implement` set up the repo's toolchain the way
   `loop-ci` does (factory-loop#41): `scripts/toolchain.py` resolves `.factory/toolchain.json` or the inferred

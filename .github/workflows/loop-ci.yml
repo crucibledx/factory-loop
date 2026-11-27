@@ -103,6 +103,9 @@ jobs:
         with:
           stack: ${{ needs.resolve.outputs.stack }}
           bun-version: ${{ inputs.bun_version }}
+      - name: Remove the factory-loop checkout
+        # The repo's checks (a tree-wide prettier, for one) must not see factory-loop's files.
+        run: rm -rf .factory-loop
       - env:
           QUALITY: ${{ needs.resolve.outputs.quality }}
         run: |
@@ -142,6 +145,9 @@ jobs:
         with:
           stack: ${{ needs.resolve.outputs.stack }}
           bun-version: ${{ inputs.bun_version }}
+      - name: Remove the factory-loop checkout
+        # The repo's checks (a tree-wide prettier, for one) must not see factory-loop's files.
+        run: rm -rf .factory-loop
       - env:
           TEST_COMMAND: ${{ needs.resolve.outputs.test }}
         run: bash -eo pipefail -c "$TEST_COMMAND"
@@ -198,6 +204,9 @@ jobs:
         with:
           stack: ${{ needs.resolve.outputs.stack }}
           bun-version: ${{ inputs.bun_version }}
+      - name: Remove the factory-loop checkout
+        # The repo's checks (a tree-wide prettier, for one) must not see factory-loop's files.
+        run: rm -rf .factory-loop
       - env:
           BUILD_COMMAND: ${{ needs.resolve.outputs.build }}
           BUILD_VERIFY: ${{ inputs.build_verify }}

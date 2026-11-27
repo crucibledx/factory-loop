@@ -201,8 +201,9 @@ for ln in lines[start:]:
 step = "\n".join(body).replace("${{ inputs.review_model }}", "m")
 with tempfile.TemporaryDirectory() as tmp:
     os.makedirs(f"{tmp}/bin")
-    os.makedirs(f"{tmp}/.factory-loop")
-    os.symlink(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "review")), f"{tmp}/.factory-loop/review")
+    # The workflow moves the checkout to $RUNNER_TEMP before the Review step; usage_limit.py is read from there.
+    os.makedirs(f"{tmp}/factory-loop")
+    os.symlink(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "review")), f"{tmp}/factory-loop/review")
     open(f"{tmp}/bin/curl", "w").write("#!/bin/sh\n")
     open(f"{tmp}/bin/droid", "w").write('#!/bin/sh\necho "$FAKE_OUT" >&2\nexit "$FAKE_STATUS"\n')
     os.chmod(f"{tmp}/bin/curl", 0o755)
