@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v0.8.0 - 2026-11-27
+
 - The repo template and the loop's docs catch up with the toolchain file (factory-loop#41): the template ships
   `toolchain.bun.example.json` and `toolchain.go.example.json` (`install.sh` never installs a declaration,
   since one overrides inference, but points at the examples), the loop contract template points at the resolved
