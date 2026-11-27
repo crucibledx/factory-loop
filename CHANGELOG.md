@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- `engineering-standards` holds Go to the same structure bar as TypeScript (implement and review stages): a
+  domain-driven layout (context packages without I/O, thin adapters, imports pointing inward), soft size limits for
+  files, functions and packages with their review severity, refactoring rules (when to extract a package, consumer-side
+  interfaces, constructors), three test layers like forge-cli (unit, contract, e2e), and `make` as the task runner.
+  A new library-first rule for TypeScript and Go says when a library fits and when to write your own; it replaces the
+  two dependency rules in section 1.
 - `loop-review` has a `run_checks` input (default `false`). When it is on, the job installs the repo's toolchain
   before the review so the reviewer can run the checks in the repo's `.factory/loop-contract.md`: Bun (from
   `.bun-version`, else `package.json`) and the dependencies, without lifecycle scripts, when the repo has `bun.lock`;
