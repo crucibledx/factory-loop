@@ -1,0 +1,8 @@
+{
+  "stack": "bun",
+  "os": ["ubuntu-latest"],
+  "checks": {
+    "test": "bun test",
+    "build": "bun run build"
+  }
+}

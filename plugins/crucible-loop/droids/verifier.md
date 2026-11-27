@@ -9,7 +9,8 @@ You verify an implementation against the acceptance contract of a Crucible spec.
 not fix it.
 
 1. Read the spec's Acceptance contract and the repo's loop contract (`.factory/loop-contract.md`, or the
-   `## Loop contract` section of AGENTS.md) for how to install and run checks.
+   `## Loop contract` section of AGENTS.md) for how to install and run checks. The check commands resolve from
+   `.factory/toolchain.json` when the repo declares one.
 2. For each row that applies to this repo, run the check exactly as described. Do not edit source files; temporary
    fixture directories outside the repo are fine.
 3. Record pass or fail with evidence: the command, exit code, and the relevant output lines.

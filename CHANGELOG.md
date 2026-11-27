@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- The repo template and the loop's docs catch up with the toolchain file (factory-loop#41): `install.sh` adds
+  `.factory/toolchain.json` (a bun example; a Go example ships alongside as `toolchain.go.example.json`), the
+  loop contract template points at the resolved commands instead of naming Bun ones, the `acceptance-contract`
+  skill's test example covers each stack, the `verifier` droid notes the declaration, and the README gains the
+  per-repo migration notes.
+
 - `loop-ci`'s quality, test and build jobs, `loop-mention`, `loop-implement` and `loop-review`'s run_checks remove
   the `.factory-loop` checkout (moved aside in the review) before the repo's own commands run: a tree-wide check such
   as `prettier --check .` no longer fails on factory-loop's files (found in crucibledx/tundish#17's CI).
