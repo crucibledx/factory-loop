@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- `loop-review`: when the head's review run stopped at the Factory usage limit, a gate-only run (a submitted review
+  or a thread reply) says "Review stopped at the usage limit; it re-runs after <reset>" with a link to that run,
+  instead of "No completed review" (factory-loop#52). When the review run ended otherwise without a review, the gate
+  names its conclusion and links it. The gate still fails until a review sets the check. The `review` job now asks
+  for `checks: read` to read the stop's annotation; the caller template already grants it, and this repo's
+  self-review now does too. A caller without it fails to start, so add `checks: read` to its `permissions`.
 - Reusable workflows pin every directly referenced third-party action to a release commit and version comment.
   Checkout v7.0.1, setup-bun v2.2.0, JUnit report v6.7.1, and create-github-app-token v3.4.0 run on Node 24;
   droid-action v14 is the current composite release. Workflow inputs and the `@v0` caller interface are unchanged.

@@ -121,6 +121,9 @@ reports it as a "Review usage limit" error with the reset time, not as a review 
 this repo every 30 minutes as the `crucible-smith` app: it re-runs those reviewer jobs (and with them the gate) in
 every repo the app is installed on, once the limit has reset, while the PR is open, not a draft, and still at the same
 commit. To go sooner, re-run the `review / reviewer` job by hand; re-running only `review / review` fails again.
+A gate-only run (a submitted review or a thread reply) on that commit fails too, but says "Review stopped at the usage
+limit; it re-runs after <reset>" with a link to the stopped run, instead of "No completed review". It needs
+`checks: read` in the caller, which the template grants.
 It needs the `SMITH_CLIENT_ID` variable and `SMITH_PRIVATE_KEY` secret on this repo, and the app's installation needs
 Actions write, Checks read (to read the job's annotations) and Pull requests read.
 
