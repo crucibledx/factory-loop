@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- The end-of-day summary (`loop-orchestrator`) has a "Problems" section: the day's problem reports from
+  `~/crucible-agents/.workstream/problems.jsonl`, fixed and open, grouped by kind. `scripts/problems.py` prints it,
+  checks each line against the format in hq `docs/workstream.md` and skips invalid ones. README step 7 follows the
+  rule that every problem is reported to Root, fixed or not.
 - `engineering-standards` holds Go to the same structure bar as TypeScript (implement and review stages): a
   domain-driven layout (context packages without I/O, thin adapters, imports pointing inward), soft size limits for
   files, functions and packages with their review severity, refactoring rules (when to extract a package, consumer-side

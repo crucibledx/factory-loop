@@ -8,7 +8,7 @@ it.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://github.com/crucibledx/assets/raw/main/factory-loop/diagrams/dark/delivery-loop.svg">
-  <img alt="Crucible delivery loop: board stages, Root routing code work to the Forge, Ember and Other workstreams, who acts at each stage, and how the loop fixes itself" src="https://github.com/crucibledx/assets/raw/main/factory-loop/diagrams/light/delivery-loop.svg">
+  <img alt="Crucible delivery loop: board stages, Root routing code work to the Forge, Ember and Other workstreams, who acts at each stage, and how every problem reaches Root through problems.jsonl" src="https://github.com/crucibledx/assets/raw/main/factory-loop/diagrams/light/delivery-loop.svg">
 </picture>
 
 1. A request arrives in Slack. An idea goes through discovery and a spec PR checked by two reviewer droids; merging
@@ -23,8 +23,11 @@ it.
    resolves what is fixed.
 6. With CI and the review gate green, Nazar reviews and approves. His approval turns on auto-merge, and GitHub merges.
    If the PR is already mergeable, the `crucible-smith` app merges the approved commit once its required checks pass.
-7. When an agent hits a problem in the loop itself, it reports it to its workstream's orchestrator. The fix ships as a
-   PR to this repo through the same gate, and moving the `v0` tag rolls workflow fixes out to every repo.
+7. Every agent reports every problem it hits with a tool, skill, script, automation, CI, relay or machine setup, fixed
+   or not, to its workstream's orchestrator, which records it in `~/crucible-agents/.workstream/problems.jsonl` (hq
+   `docs/workstream.md`, "Problem reports"). Root reads the new lines on each tick, acts on the unfixed ones, and lists
+   the day's problems, fixed and unfixed, in the end-of-day summary. A loop fix ships as a PR to this repo through the
+   same gate, and moving the `v0` tag rolls workflow fixes out to every repo.
 
 ### Requests from Slack
 
