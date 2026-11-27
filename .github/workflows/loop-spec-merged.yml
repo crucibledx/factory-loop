@@ -18,13 +18,13 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
       - name: Get crucible-smith token
         id: smith
         if: vars.SMITH_CLIENT_ID != ''
-        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0, pinned: handles the app's private key
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0, pinned: handles the app's private key
         with:
           client-id: ${{ vars.SMITH_CLIENT_ID }}
           private-key: ${{ secrets.SMITH_PRIVATE_KEY }}
