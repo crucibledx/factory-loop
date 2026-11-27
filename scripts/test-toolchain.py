@@ -216,8 +216,12 @@ check("every third-party action is pinned to a commit SHA",
 check("the setup action handles every stack the resolver knows",
       all(f"inputs.stack == '{s}'" in action or s == "none" for s in tc.STACKS)
       and all(f"inputs.stack != '{s}'" in action for s in tc.STACKS))
+assets_blocks = [b for b in action.split("\n    - ") if "inputs.stack == 'assets'" in b]
 check("the assets setup is bun for bunx svgo plus a Git LFS pull, installing nothing",
-      "inputs.stack == 'assets'" in action and "git lfs install" in action and "git lfs pull" in action)
+      len(assets_blocks) == 2
+      and any("oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6" in b for b in assets_blocks)
+      and any("git lfs install" in b and "git lfs pull" in b for b in assets_blocks)
+      and all("bun install" not in b for b in assets_blocks))
 bun_steps = action.split("inputs.stack == 'bun'")
 check("the bun setup keeps the callers' version resolution: .bun-version only when bun_version is empty",
       len(bun_steps) >= 4 and '[ -z "$BUN_VERSION" ] && [ -f .bun-version ]' in action

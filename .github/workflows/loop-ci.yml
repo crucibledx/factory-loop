@@ -19,13 +19,13 @@ on:
         description: >-
           Space-separated package.json scripts for the quality job (bun stack). toolchain-default uses checks.quality
           from .factory/toolchain.json, then the stack's default (format:check lint typecheck for bun, make lint for
-          go). Set to "" to run no quality checks.
+          go, optimize-svgs plus a diff gate for assets). Set to "" to run no quality checks.
         type: string
         default: toolchain-default
       test_command:
         description: >-
           Test command. toolchain-default uses checks.test from .factory/toolchain.json, then the stack's default
-          (bun test --pass-with-no-tests for bun, make test for go). Set to "" to skip tests.
+          (bun test --pass-with-no-tests for bun, make test for go, none for assets). Set to "" to skip tests.
         type: string
         default: toolchain-default
       junit_paths:
@@ -35,8 +35,8 @@ on:
       build_command:
         description: >-
           Build command. toolchain-default uses checks.build from .factory/toolchain.json, then the stack's default
-          (make build for go, none for bun). Set to "" to skip the build. The build job runs only when a build
-          command is set.
+          (make build for go, none for bun and assets). Set to "" to skip the build. The build job runs only when a
+          build command is set.
         type: string
         default: toolchain-default
       build_verify:
