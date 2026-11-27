@@ -40,8 +40,9 @@ on:
         default: v0
       run_checks:
         description: >-
-          Install the repo's toolchain (Bun and dependencies when it has bun.lock, actionlint when its loop contract
-          lists it) and let the reviewer run the loop contract's checks. This runs PR code in the reviewer job, which
+          Resolve the repo's toolchain (.factory/toolchain.json, else Bun or Go inferred from its files) and install
+          it without running repository code, then let the reviewer run the resolved loop-contract checks. This runs
+          PR code in the reviewer job, which
           has no write token but holds FACTORY_API_KEY and writes the result the gate acts on, so enable it only where
           every PR author is trusted.
         type: boolean
@@ -92,21 +93,21 @@ jobs:
         run: echo "mode=$(python3 .factory-loop/review/loop_review.py collect)" >> "$GITHUB_OUTPUT"
       # run_checks: the repo's toolchain, so the reviewer can run the checks in its loop contract (collect puts the
       # permission in the prompt). A failed install never blocks the review; the reviewer is told.
-      - name: Set up Bun
-        id: bun
-        if: inputs.run_checks && steps.collect.outputs.mode != 'gate' && hashFiles('bun.lock', 'bun.lockb') != ''
+      - name: Resolve the toolchain
+        id: toolchain
+        if: inputs.run_checks && steps.collect.outputs.mode != 'gate'
         continue-on-error: true
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version-file: ${{ hashFiles('.bun-version') != '' && '.bun-version' || '' }}
-      - name: Install dependencies
-        id: deps
-        if: inputs.run_checks && steps.collect.outputs.mode != 'gate' && hashFiles('bun.lock', 'bun.lockb') != ''
+        run: python3 .factory-loop/scripts/toolchain.py
+      - name: Set up the toolchain
+        id: setup
+        if: inputs.run_checks && steps.collect.outputs.mode != 'gate' && steps.toolchain.outputs.stack != ''
         continue-on-error: true
         env:
           GH_TOKEN: ''
-        # Lifecycle scripts are PR code; skip them so installing runs nothing from the PR.
-        run: bun install --frozen-lockfile --ignore-scripts
+        uses: ./.factory-loop/.github/actions/setup-toolchain
+        with:
+          stack: ${{ steps.toolchain.outputs.stack }}
+          ignore-scripts: "true"
       - name: Install actionlint
         id: actionlint
         if: inputs.run_checks && steps.collect.outputs.mode != 'gate'
@@ -129,7 +130,7 @@ jobs:
       - name: Note a failed install
         if: >-
           inputs.run_checks && steps.collect.outputs.mode != 'gate' &&
-          (steps.bun.outcome == 'failure' || steps.deps.outcome == 'failure' || steps.actionlint.outcome == 'failure')
+          (steps.toolchain.outcome == 'failure' || steps.setup.outcome == 'failure' || steps.actionlint.outcome == 'failure')
         run: |
           printf '\nA toolchain install failed on this runner. Report checks it breaks as could not run, never as findings.\n' \
             >> "$LOOP_REVIEW_DIR/prompt.md"

@@ -212,7 +212,22 @@ def render_prompt(mode, run_checks):
     prompt = prompt.replace("{{DIFF_PATH}}", f"{OUT}/diff.patch").replace("{{RESULT_PATH}}", f"{OUT}/result.json")
     prompt = prompt.replace("{{STANDARDS_PATH}}", os.environ.get("LOOP_STANDARDS", ""))
     prompt = prompt.replace("{{ORG_RULES}}", org_rules())
+    if run_checks:
+        checks += "\n\n" + resolved_checks()
     return prompt.replace("{{CHECKS}}", checks)
+
+
+def resolved_checks():
+    """The repo's resolved toolchain for the run_checks prompt. Never fails the review."""
+    script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts", "toolchain.py")
+    try:
+        proc = subprocess.run([sys.executable, script, "--describe"], capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.SubprocessError) as err:
+        return f"The toolchain could not be resolved ({err}); report checks that need it as could not run."
+    out = (proc.stdout if proc.returncode == 0 else proc.stderr or proc.stdout).strip()
+    if proc.returncode != 0:
+        return f"The toolchain could not be resolved: {out}. Report its checks as could not run."
+    return "The resolved toolchain (from .factory/toolchain.json or the repo's files):\n" + out
 
 
 def org_rules():

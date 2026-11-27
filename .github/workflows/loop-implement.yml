@@ -8,12 +8,16 @@ on:
         type: boolean
         default: false
       setup_bun:
-        description: Install Bun before Droid runs
+        description: Deprecated. The toolchain comes from .factory/toolchain.json; false only skips the bun stack's setup.
         type: boolean
         default: true
       timeout_minutes:
         type: number
         default: 240
+      loop_ref:
+        description: Ref of crucibledx/factory-loop to load the toolchain resolver and setup from.
+        type: string
+        default: v0
     secrets:
       FACTORY_API_KEY:
         required: true
@@ -38,8 +42,18 @@ jobs:
         with:
           fetch-depth: 0
           lfs: ${{ inputs.lfs }}
-      - if: inputs.setup_bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: crucibledx/factory-loop
+          ref: ${{ inputs.loop_ref }}
+          path: .factory-loop
+          persist-credentials: false
+      - id: toolchain
+        run: python3 .factory-loop/scripts/toolchain.py
+      - if: steps.toolchain.outputs.stack != 'bun' || inputs.setup_bun
+        uses: ./.factory-loop/.github/actions/setup-toolchain
+        with:
+          stack: ${{ steps.toolchain.outputs.stack }}
       - uses: Factory-AI/droid-action@035954f0d86a72304d87a75a8625aa34699e1274 # v14
         with:
           factory_api_key: ${{ secrets.FACTORY_API_KEY }}

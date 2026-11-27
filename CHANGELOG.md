@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- `loop-review`'s `run_checks`, `loop-mention` and `loop-implement` set up the repo's toolchain the way
+  `loop-ci` does (factory-loop#41): `scripts/toolchain.py` resolves `.factory/toolchain.json` or the inferred
+  stack, and the `setup-toolchain` action installs it, loaded from factory-loop at a new `loop_ref` input (default
+  `v0`). The review installs dependencies with `--ignore-scripts` (and never runs the repo's Makefile), as before,
+  and its prompt names the resolved stack, runners and check commands. `loop-implement`'s `setup_bun` input is
+  deprecated; false only skips the bun stack's setup.
+
 ## v0.7.0 — 2026-11-27
 
 - `implement-spec`: after pushing to a draft PR, poll `gh pr view --json headRefOid` until it shows the pushed
