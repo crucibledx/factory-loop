@@ -1,7 +1,8 @@
 # factory-loop — Agent Context
 
 Shared delivery loop for all `crucibledx` repos: a Droid plugin (skills, droids, hooks) and reusable GitHub workflows.
-Org context: `crucibledx/hq` `AGENTS.md`.
+Org rules: `plugins/crucible-loop/skills/engineering-standards/org-rules.md` (the PR reviewer gets them in its
+prompt). Agents with a clone of the private `crucibledx/hq` also read its `AGENTS.md`; the hosted reviewer can't.
 
 ## Rules
 

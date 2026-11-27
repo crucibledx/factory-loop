@@ -8,7 +8,10 @@
   merge conflicts, git is older, or the PR and the base have more than one merge base, the diff is the whole PR (what
   `gh pr diff` shows), the job log says why, and the review context's new `diff_scope` field says `whole_pr`;
   otherwise it is `since_review`. Follow-ups without a base merge are unchanged.
-
+- `loop-review` gives the reviewer the org rules in its prompt (factory-loop#53). They live in
+  `plugins/crucible-loop/skills/engineering-standards/org-rules.md`, which `collect` inlines; the prompt tells the
+  reviewer not to read the private `crucibledx/hq`, whose `AGENTS.md` it could not fetch (HTTP 404). `AGENTS.md`
+  points at the new file instead of hq.
 - `loop-review`: when the head's review run stopped at the Factory usage limit, a gate-only run (a submitted review
   or a thread reply) says "Review stopped at the usage limit; it re-runs after <reset>" with a link to that run,
   instead of "No completed review" (factory-loop#52). When the review run ended otherwise without a review, the gate
