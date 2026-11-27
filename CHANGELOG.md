@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- The end-of-day summary (`loop-orchestrator`) has a "Problems" section: the day's problem reports from
+  `~/crucible-agents/.workstream/problems.jsonl`, fixed and open, grouped by kind. `scripts/problems.py` prints it,
+  checks each line against the format in hq `docs/workstream.md` and skips invalid ones. README step 7 follows the
+  rule that every problem is reported to Root, fixed or not.
+
 ## v0.6.0 — 2026-11-27
 
 - The caller template's `review` job skips draft PRs (`!github.event.pull_request.draft`), and so does this repo's
