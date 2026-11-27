@@ -131,6 +131,16 @@ with tempfile.TemporaryDirectory() as tmp:
     check("deep nesting, lone surrogates and credentials skip only their lines", r.returncode == 0
           and r.stdout == "• *tool* (2): first (other, fixed), last (other, fixed)\n"
           and r.stderr.count("line skipped") == 5 and TOKEN not in r.stderr + r.stdout and "ud800" not in r.stderr)
+    nested = os.path.join(tmp, "nested.jsonl")
+    with open(nested, "w", encoding="utf-8") as fh:
+        for name, extra in (("at-limit", "[" * 31 + "]" * 31), ("over-limit", "[" * 32 + "]" * 32),
+                            ("brackets-in-string", json.dumps("[{" * 100 + '\\"[[' * 50))):
+            fh.write(json.dumps(problem(name=name))[:-1] + ', "extra": ' + extra + "}\n")
+    warnings = []
+    got = pr.load_entries(nested, warn=warnings.append)
+    check("nesting is limited to 32 levels; brackets inside strings do not count",
+          [e["name"] for e in got] == ["at-limit", "brackets-in-string"]
+          and len(warnings) == 1 and warnings[0].endswith(":2: nested too deep, line skipped"))
     r = run(os.path.join(tmp, "nope"))
     check("a missing file exits 0 with no output", r.returncode == 0 and r.stdout == "")
     r = run(tmp)

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- `scripts/problems.py` skips a report line nested more than 32 levels deep before parsing it, so it gives the same
+  result on every Python version. Before, it relied on json's `RecursionError`, which Python 3.9 raises on deep input
+  but 3.12 does not, so a deeply nested line was skipped on 3.9 and read on 3.12, and `test-problems.py` failed on
+  the CI runner's 3.12.
 - Reusable workflows pin every directly referenced third-party action to a release commit and version comment.
   Checkout v7.0.1, setup-bun v2.2.0, JUnit report v6.7.1, and create-github-app-token v3.4.0 run on Node 24;
   droid-action v14 is the current composite release. Workflow inputs and the `@v0` caller interface are unchanged.
