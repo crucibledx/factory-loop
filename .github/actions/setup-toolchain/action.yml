@@ -5,7 +5,7 @@ description: >-
 
 inputs:
   stack:
-    description: bun, go or none.
+    description: bun, go, assets or none.
     required: true
   bun-version:
     description: Bun version. Empty uses .bun-version, then package.json (packageManager, engines.bun), then latest.
@@ -19,12 +19,12 @@ inputs:
 runs:
   using: composite
   steps:
-    - if: inputs.stack != 'bun' && inputs.stack != 'go' && inputs.stack != 'none'
+    - if: inputs.stack != 'bun' && inputs.stack != 'go' && inputs.stack != 'assets' && inputs.stack != 'none'
       shell: bash
       env:
         STACK: ${{ inputs.stack }}
       run: |
-        echo "::error::Unknown stack '$STACK' (expected bun, go or none)."
+        echo "::error::Unknown stack '$STACK' (expected bun, go, assets or none)."
         exit 1
 
     - id: bun-file
@@ -49,6 +49,16 @@ runs:
           else bun install --frozen-lockfile; fi
         else
           echo "::notice::No package.json, dependencies not installed."; fi
+
+    # Assets repos optimize SVGs with bunx svgo and store the binaries in Git LFS. No package.json, so nothing to
+    # install; git lfs pull only fetches objects, it runs no repository code.
+    - if: inputs.stack == 'assets'
+      uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+    - if: inputs.stack == 'assets'
+      shell: bash
+      run: |
+        git lfs install
+        git lfs pull
 
     - if: inputs.stack == 'go'
       uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0

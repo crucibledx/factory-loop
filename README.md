@@ -72,7 +72,7 @@ to `.factory/toolchain.json` and edit it; `install.sh` never adds the file itsel
 overrides inference.
 
 `.github/workflows/ci.yml` calls `loop-ci`. A repo declares its toolchain in `.factory/toolchain.json`: the `stack`
-(`bun`, `go` or `none`), the `os` runners its tests run on, and `checks` commands. Without the file the stack is
+(`bun`, `go`, `assets` or `none`), the `os` runners its tests run on, and `checks` commands. Without the file the stack is
 inferred (`bun.lock` or `package.json` → `bun`, `go.mod` → `go`, otherwise `none`), so a Bun caller keeps its
 behavior with no edits. Quality runs the `format:check lint typecheck` scripts that `package.json` defines for Bun
 repos, or the declared commands. Tests run in one `test-lane (<os>)` per declared runner, and `ci / test` gates on
@@ -86,8 +86,8 @@ non-draft PRs. `install.sh` keeps an existing `crucible-loop.yml`; in a repo tha
 
 `loop-review` reviews without running the repo's code by default. With `run_checks: true` in the caller's `review` job,
 it sets up the repo's toolchain from `.factory/toolchain.json` or the inferred stack (Bun and the dependencies for a
-Bun repo, Go with modules and golangci-lint for a Go repo, without lifecycle scripts) and `actionlint` (when the loop
-contract lists it), and the reviewer runs the loop contract's checks. The prompt names the resolved stack and commands. That runs PR code in the `review / reviewer` job. That job has no
+Bun repo, Go with modules and golangci-lint for a Go repo, Bun and Git LFS objects for an assets repo, without
+lifecycle scripts) and `actionlint` (when the loop contract lists it), and the reviewer runs the loop contract's checks. The prompt names the resolved stack and commands. That runs PR code in the `review / reviewer` job. That job has no
 write token, but it holds `FACTORY_API_KEY` and writes the `result.json` that the `review / review` job posts and
 gates on, so turn it on only in repos where every PR author is trusted.
 

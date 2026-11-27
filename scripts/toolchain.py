@@ -28,6 +28,8 @@ PROFILES = {
     "bun": {"quality_scripts": ["format:check", "lint", "typecheck"], "test": "bun test --pass-with-no-tests",
             "build": ""},
     "go": {"quality": ["make lint"], "test": "make test", "build": "make build"},
+    "assets": {"quality": ["bash scripts/optimize-svgs.sh", "git diff --exit-code", "bash scripts/check-lfs.sh"],
+                "test": "", "build": ""},
     "none": {"quality": [], "test": "", "build": ""},
 }
 STACKS = tuple(PROFILES)

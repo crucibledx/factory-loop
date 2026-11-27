@@ -84,6 +84,16 @@ check("a repo with neither infers none and passes with a notice",
       and "::notice::Stack none: nothing to check." in out)
 check("package.json wins over go.mod, as loop-ci ran Bun before",
       run({"package.json": PKG, "go.mod": "module x\n"})[2]["stack"] == "bun")
+code, out, o = run({DECL: {"stack": "assets"}})
+check("the assets stack optimizes SVGs, fails on the diff and checks LFS tracking, with no test or build",
+      code == 0 and o["stack"] == "assets"
+      and o["quality"] == "bash scripts/optimize-svgs.sh\ngit diff --exit-code\nbash scripts/check-lfs.sh"
+      and o["test"] == "" and o["build"] == "")
+# The scripts have a bash shebang and bashisms; the runner's sh (dash) would fail them. Run the resolved command.
+svg_repo = repo({"scripts/optimize-svgs.sh": "#!/usr/bin/env bash\nset -euo pipefail\ns=x; [[ $s == x ]]\n"})
+line1 = o["quality"].splitlines()[0]
+done = subprocess.run(["bash", "-eo", "pipefail", "-c", line1], cwd=svg_repo, capture_output=True, text=True)
+check("the resolved optimizer command runs a bash-only script", done.returncode == 0 and line1.startswith("bash "))
 
 # The slack-bridge caller: its inputs give the same commands as before.
 code, out, o = run({"package.json": PKG, "bun.lock": ""}, {"TEST_COMMAND": "bun test", "BUILD_COMMAND": "bun run build"})
@@ -122,7 +132,7 @@ bad = [
     ("not JSON", "{", "cannot read it as JSON"),
     ("not an object", [], "must be a JSON object"),
     ("an unknown key", {"stak": "go"}, "unknown keys ['stak']"),
-    ("an unknown stack", {"stack": "python"}, "stack must be one of ['bun', 'go', 'none']"),
+    ("an unknown stack", {"stack": "python"}, "stack must be one of ['bun', 'go', 'assets', 'none']"),
     ("an empty os list", {"os": []}, "os must be a list of 1 to 8"),
     ("an os that isn't a list", {"os": "ubuntu-latest"}, "os must be a list"),
     ("a bad runner label", {"os": ["ubuntu latest"]}, "os entries must be distinct runner labels"),
@@ -211,6 +221,12 @@ check("every third-party action is pinned to a commit SHA",
 check("the setup action handles every stack the resolver knows",
       all(f"inputs.stack == '{s}'" in action or s == "none" for s in tc.STACKS)
       and all(f"inputs.stack != '{s}'" in action for s in tc.STACKS))
+assets_blocks = [b for b in action.split("\n    - ") if "inputs.stack == 'assets'" in b]
+check("the assets setup is bun for bunx svgo plus a Git LFS pull, installing nothing",
+      len(assets_blocks) == 2
+      and any("oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6" in b for b in assets_blocks)
+      and any("git lfs install" in b and "git lfs pull" in b for b in assets_blocks)
+      and all("bun install" not in b for b in assets_blocks))
 bun_steps = action.split("inputs.stack == 'bun'")
 check("the bun setup keeps the callers' version resolution: .bun-version only when bun_version is empty",
       len(bun_steps) >= 4 and '[ -z "$BUN_VERSION" ] && [ -f .bun-version ]' in action
