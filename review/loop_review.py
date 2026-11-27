@@ -21,6 +21,8 @@ import urllib.request
 
 API = os.environ.get("GITHUB_API_URL", "https://api.github.com")
 OUT = os.environ.get("LOOP_REVIEW_DIR", ".loop-review")
+ORG_RULES_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "plugins", "crucible-loop", "skills",
+                              "engineering-standards", "org-rules.md")
 REVIEW_MARK = re.compile(r"<!-- crucible-review sha=([0-9a-f]{7,40})(?: first_size=(\d+))? -->")
 FINDING_MARK = re.compile(r"<!-- crucible-finding sev=(P[0-2]) -->")
 SEVERITIES = ("P0", "P1", "P2")
@@ -209,7 +211,14 @@ def render_prompt(mode, run_checks):
     prompt = template.replace("{{MODE}}", mode).replace("{{CONTEXT_PATH}}", f"{OUT}/context.json")
     prompt = prompt.replace("{{DIFF_PATH}}", f"{OUT}/diff.patch").replace("{{RESULT_PATH}}", f"{OUT}/result.json")
     prompt = prompt.replace("{{STANDARDS_PATH}}", os.environ.get("LOOP_STANDARDS", ""))
+    prompt = prompt.replace("{{ORG_RULES}}", org_rules())
     return prompt.replace("{{CHECKS}}", checks)
+
+
+def org_rules():
+    """The org rules, inlined: the reviewer cannot read the private hq repo they come from."""
+    with open(ORG_RULES_PATH, encoding="utf-8") as fh:
+        return fh.read().strip()
 
 
 def pr_state():

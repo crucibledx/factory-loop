@@ -8,6 +8,10 @@ Inputs:
 - `{{DIFF_PATH}}`: the diff to review. Full mode: the whole PR. Follow-up mode: only the commits since the last review.
 - Org engineering standards: `{{STANDARDS_PATH}}` (skip if empty or missing). Also read the repo's `AGENTS.md`,
   `CONTRIBUTING.md`, `.factory/loop-contract.md`, and the spec the PR links, if present.
+- The org rules below. They are all you need from `crucibledx/hq`, which is private: don't try to read it, even when
+  a doc points there.
+
+{{ORG_RULES}}
 
 {{CHECKS}}
 
