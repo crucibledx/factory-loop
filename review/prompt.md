@@ -5,7 +5,9 @@ repository; the only file you write is `{{RESULT_PATH}}`.
 
 Inputs:
 - `{{CONTEXT_PATH}}`: PR title, body, head/base SHAs, size, and (follow-up mode) the open review threads.
-- `{{DIFF_PATH}}`: the diff to review. Full mode: the whole PR. Follow-up mode: only the commits since the last review.
+- `{{DIFF_PATH}}`: the diff to review. Full mode: the whole PR. Follow-up mode: only the changes since the last review,
+  without what a merge of the base branch brought in; `diff_scope` in the context is `whole_pr` when those could not
+  be separated and the diff is the whole PR.
 - Org engineering standards: `{{STANDARDS_PATH}}` (skip if empty or missing). Also read the repo's `AGENTS.md`,
   `CONTRIBUTING.md`, `.factory/loop-contract.md`, and the spec the PR links, if present.
 - The org rules below. They are all you need from `crucibledx/hq`, which is private: don't try to read it, even when
