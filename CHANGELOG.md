@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- The end-of-day summary (`loop-orchestrator`) has a "Problems" section: the day's problem reports from
+  `~/crucible-agents/.workstream/problems.jsonl`, fixed and open, grouped by kind. `scripts/problems.py` prints it,
+  checks each line against the format in hq `docs/workstream.md` and skips invalid ones. README step 7 follows the
+  rule that every problem is reported to Root, fixed or not.
 - factory-loop checks itself in CI: the new `checks` job (`self-checks.yml`) runs `scripts/check.sh` (every
   `scripts/test-*`, a pinned and checksum-verified `actionlint`, and every tracked JSON file) on each PR and on `main`,
   read-only and without secrets. `scripts/test-review.py` no longer depends on inherited `GITHUB_*` and `LOOP_*`
