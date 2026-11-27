@@ -9,6 +9,10 @@ import tempfile
 import types
 from contextlib import redirect_stdout
 
+# The same results locally, in an Actions job and under the hosted reviewer: nothing loop_review reads is inherited.
+for name in [k for k in os.environ if k.startswith(("GITHUB_", "LOOP_"))] + ["EVENT_NAME", "BLOCKING_SEVERITIES"]:
+    os.environ.pop(name, None)
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "review"))
 import loop_review as lr  # noqa: E402
 

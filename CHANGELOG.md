@@ -30,6 +30,10 @@
   the gate after it. Callers don't change. With `run_checks`, PR code can still read `FACTORY_API_KEY` and shape the
   verdict, so the input stays off by default. factory-loop's own self-review still runs the PR's workflow and
   `review/` scripts with the write token, by design.
+- factory-loop checks itself in CI: the new `checks` job (`self-checks.yml`) runs `scripts/check.sh` (every
+  `scripts/test-*`, a pinned and checksum-verified `actionlint`, and every tracked JSON file) on each PR and on `main`,
+  read-only and without secrets. `scripts/test-review.py` no longer depends on inherited `GITHUB_*` and `LOOP_*`
+  variables, so it also passes inside Actions jobs and under the hosted reviewer.
 
 ## v0.6.0 — 2026-11-27
 

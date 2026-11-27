@@ -128,6 +128,13 @@ A gate-only run (a submitted review or a thread reply) on that commit fails too,
 limit; it re-runs after <reset>" with a link to the stopped run, instead of "No completed review". It needs
 `checks: read` in the caller, which the template grants.
 
+## This repo's checks
+
+`sh scripts/check.sh` runs every tracked `scripts/test-*`, `actionlint` (with `shellcheck`) on both workflow sets, and a parse of every tracked JSON
+file. The `checks` job in `.github/workflows/self-checks.yml` runs the same script on every PR and on `main`, with
+read-only permissions and no secrets. Add `checks` to the required checks of this repo's `main` ruleset, next to
+`review / review`, so a PR that breaks a script cannot be merged or auto-merged.
+
 ## Use the plugin locally
 
 ```sh

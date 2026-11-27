@@ -21,13 +21,12 @@ Org context: `crucibledx/hq` `AGENTS.md`.
 
 ## Checks
 
-- JSON parses: `python3 -m json.tool` on `.factory-plugin/*.json` and `plugins/*/.factory-plugin/*.json`, `hooks.json`.
+`sh scripts/check.sh` runs them all; CI's `checks` job (`.github/workflows/self-checks.yml`) runs the same script on
+every PR and on `main`. It needs `python3`, `git`, `shellcheck` and `actionlint` 1.7.12 (the version CI pins).
+
+- Every tracked `scripts/test-*`: `.py` with `python3`, `.sh` with `sh`. A new test is picked up by its name once
+  it is added to git.
 - Workflows lint: `actionlint .github/workflows/*.yml templates/repo/.github/workflows/*.yml`.
-- Review helper: `python3 scripts/test-review.py`.
-- Review usage-limit retry: `python3 scripts/test-usage-limit.py`.
-- Guard hook: `sh scripts/test-guard.sh`.
-- Auto-merge script: `sh scripts/test-automerge.sh`.
-- Slack usage helper: `python3 scripts/test-slack-usage.py`.
-- Problem reports helper: `python3 scripts/test-problems.py`.
+- Every tracked `*.json` file parses.
 
 Commits: `feat: ...`, `fix: ...`, `docs: ...`. Tag releases `v0.x.y` and move the `v0` tag.
