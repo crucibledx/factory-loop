@@ -1,7 +1,7 @@
 name: Loop / CI
 
 # Org CI: quality, tests and build with the repo's toolchain.
-# The stack (bun, go or none) and the commands come from .factory/toolchain.json; without one the stack is inferred
+# The stack (bun, go, assets or none) and the commands come from .factory/toolchain.json; without one the stack is inferred
 # (bun.lock or package.json: bun, go.mod: go, otherwise none). scripts/toolchain.py resolves them in the resolve job:
 # inputs the caller sets win over the file, and the file over the stack's defaults. Package scripts in
 # quality_scripts run only when package.json defines them, so one caller fits every Bun repo.

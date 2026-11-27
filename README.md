@@ -70,7 +70,7 @@ Then edit `.factory/loop-contract.md` with the repo's real check commands. (A `#
 `AGENTS.md` also works.)
 
 `.github/workflows/ci.yml` calls `loop-ci`. A repo declares its toolchain in `.factory/toolchain.json`: the `stack`
-(`bun`, `go` or `none`), the `os` runners its tests run on, and `checks` commands. Without the file the stack is
+(`bun`, `go`, `assets` or `none`), the `os` runners its tests run on, and `checks` commands. Without the file the stack is
 inferred (`bun.lock` or `package.json` → `bun`, `go.mod` → `go`, otherwise `none`), so a Bun caller keeps its
 behavior with no edits. Quality runs the `format:check lint typecheck` scripts that `package.json` defines for Bun
 repos, or the declared commands. Tests run in one `test-lane (<os>)` per declared runner, and `ci / test` gates on

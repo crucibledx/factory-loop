@@ -84,6 +84,11 @@ check("a repo with neither infers none and passes with a notice",
       and "::notice::Stack none: nothing to check." in out)
 check("package.json wins over go.mod, as loop-ci ran Bun before",
       run({"package.json": PKG, "go.mod": "module x\n"})[2]["stack"] == "bun")
+code, out, o = run({DECL: {"stack": "assets"}})
+check("the assets stack optimizes SVGs and fails on the diff, with no test or build",
+      code == 0 and o["stack"] == "assets"
+      and o["quality"] == "sh scripts/optimize-svgs.sh\ngit diff --exit-code"
+      and o["test"] == "" and o["build"] == "")
 
 # The slack-bridge caller: its inputs give the same commands as before.
 code, out, o = run({"package.json": PKG, "bun.lock": ""}, {"TEST_COMMAND": "bun test", "BUILD_COMMAND": "bun run build"})
@@ -122,7 +127,7 @@ bad = [
     ("not JSON", "{", "cannot read it as JSON"),
     ("not an object", [], "must be a JSON object"),
     ("an unknown key", {"stak": "go"}, "unknown keys ['stak']"),
-    ("an unknown stack", {"stack": "python"}, "stack must be one of ['bun', 'go', 'none']"),
+    ("an unknown stack", {"stack": "python"}, "stack must be one of ['bun', 'go', 'assets', 'none']"),
     ("an empty os list", {"os": []}, "os must be a list of 1 to 8"),
     ("an os that isn't a list", {"os": "ubuntu-latest"}, "os must be a list"),
     ("a bad runner label", {"os": ["ubuntu latest"]}, "os entries must be distinct runner labels"),
@@ -211,6 +216,8 @@ check("every third-party action is pinned to a commit SHA",
 check("the setup action handles every stack the resolver knows",
       all(f"inputs.stack == '{s}'" in action or s == "none" for s in tc.STACKS)
       and all(f"inputs.stack != '{s}'" in action for s in tc.STACKS))
+check("the assets setup is bun for bunx svgo plus a Git LFS pull, installing nothing",
+      "inputs.stack == 'assets'" in action and "git lfs install" in action and "git lfs pull" in action)
 bun_steps = action.split("inputs.stack == 'bun'")
 check("the bun setup keeps the callers' version resolution: .bun-version only when bun_version is empty",
       len(bun_steps) >= 4 and '[ -z "$BUN_VERSION" ] && [ -f .bun-version ]' in action

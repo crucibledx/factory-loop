@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- The toolchain resolver and the setup action know an `assets` stack (factory-loop#41): Bun for `bunx svgo` and a
+  Git LFS pull, with `sh scripts/optimize-svgs.sh` plus a `git diff --exit-code` quality gate and no test or
+  build. Declared only, never inferred.
+
+
 - `loop-review`'s `run_checks`, `loop-mention` and `loop-implement` set up the repo's toolchain the way
   `loop-ci` does (factory-loop#41): `scripts/toolchain.py` resolves `.factory/toolchain.json` or the inferred
   stack, and the `setup-toolchain` action installs it, loaded from factory-loop at a new `loop_ref` input (default
