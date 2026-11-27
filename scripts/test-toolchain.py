@@ -126,6 +126,7 @@ bad = [
     ("an empty os list", {"os": []}, "os must be a list of 1 to 8"),
     ("an os that isn't a list", {"os": "ubuntu-latest"}, "os must be a list"),
     ("a bad runner label", {"os": ["ubuntu latest"]}, "os entries must be distinct runner labels"),
+    ("a runner label with a newline", {"os": ["ubuntu-latest\n"]}, "os entries must be distinct runner labels"),
     ("a repeated runner", {"os": ["ubuntu-latest", "ubuntu-latest"]}, "os entries must be distinct"),
     ("checks that isn't an object", {"checks": []}, "checks must be an object"),
     ("an unknown check", {"checks": {"lint": "x"}}, "unknown checks ['lint']"),
@@ -186,5 +187,27 @@ check("every third-party action is pinned to a commit SHA",
 check("the setup action handles every stack the resolver knows",
       all(f"inputs.stack == '{s}'" in action or s == "none" for s in tc.STACKS)
       and all(f"inputs.stack != '{s}'" in action for s in tc.STACKS))
+bun_steps = action.split("inputs.stack == 'bun'")
+check("the bun setup keeps the callers' version resolution: .bun-version only when bun_version is empty",
+      len(bun_steps) >= 4 and '[ -z "$BUN_VERSION" ] && [ -f .bun-version ]' in action
+      and 'echo "file=.bun-version" >> "$GITHUB_OUTPUT"' in action
+      and "bun-version: ${{ inputs.bun-version }}" in action
+      and "bun-version-file: ${{ steps.bun-file.outputs.file }}" in action)
+check("the bun install stays conditional on package.json",
+      'if [ -f package.json ]; then bun install --frozen-lockfile; else' in action)
+
+# The ci / test gate's shell, run with the values the workflow passes it.
+gate = re.search(r"run: \|\n((?:          .+\n?)+)", jobs["test"]).group(1)
+def gate_rc(resolve, lanes, test_command):
+    proc = subprocess.run(["bash", "-c", gate], capture_output=True,
+                          env={"RESOLVE": resolve, "LANES": lanes, "TEST_COMMAND": test_command, "PATH": "/usr/bin:/bin"})
+    return proc.returncode
+check("the gate passes when every lane passed", gate_rc("success", "success", "make test") == 0)
+check("the gate fails when a lane failed or was cancelled",
+      gate_rc("success", "failure", "make test") != 0 and gate_rc("success", "cancelled", "make test") != 0)
+check("the gate fails when the resolve job failed", gate_rc("failure", "skipped", "") != 0)
+check("the gate fails when lanes were skipped but a test command resolved",
+      gate_rc("success", "skipped", "make test") != 0)
+check("the gate passes with a notice when there are no tests", gate_rc("success", "skipped", "") == 0)
 
 sys.exit(1 if failures else 0)

@@ -84,7 +84,7 @@ def validate(decl):
         runners = decl["os"]
         if not isinstance(runners, list) or not 1 <= len(runners) <= MAX_OS:
             raise Invalid(f"os must be a list of 1 to {MAX_OS} runner labels")
-        if not all(isinstance(r, str) and RUNNER.match(r) for r in runners) or len(set(runners)) != len(runners):
+        if not all(isinstance(r, str) and RUNNER.fullmatch(r) for r in runners) or len(set(runners)) != len(runners):
             raise Invalid("os entries must be distinct runner labels such as ubuntu-latest")
     checks = decl.get("checks", {})
     if not isinstance(checks, dict):
