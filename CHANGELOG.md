@@ -5,10 +5,15 @@
 - `loop-review`'s `run_checks`, `loop-mention` and `loop-implement` set up the repo's toolchain the way
   `loop-ci` does (factory-loop#41): `scripts/toolchain.py` resolves `.factory/toolchain.json` or the inferred
   stack, and the `setup-toolchain` action installs it, loaded from factory-loop at a new `loop_ref` input (default
-  `v0`). The review installs dependencies with `--ignore-scripts`, as before, and its prompt names the resolved
-  stack, runners and check commands. `loop-implement`'s `setup_bun` input is deprecated; false only skips the bun
-  stack's setup.
+  `v0`). The review installs dependencies with `--ignore-scripts` (and never runs the repo's Makefile), as before,
+  and its prompt names the resolved stack, runners and check commands. `loop-implement`'s `setup_bun` input is
+  deprecated; false only skips the bun stack's setup.
 
+## v0.7.0 — 2026-11-27
+
+- `implement-spec`: after pushing to a draft PR, poll `gh pr view --json headRefOid` until it shows the pushed
+  commit (every few seconds, give up with a clear error after about 60 seconds) before `gh pr ready`. GitHub lags
+  after a push; marking ready against a stale head ran the review on the wrong commit.
 - `loop-ci` runs each repo's toolchain, not just Bun (factory-loop#41). A new optional `.factory/toolchain.json`
   declares the `stack` (`bun`, `go` or `none`), the `os` runners the tests run on, and `checks` commands; without it
   the stack is inferred as before (`bun.lock` or `package.json` → `bun`, `go.mod` → `go`, otherwise `none`), so a
