@@ -55,6 +55,7 @@ jobs:
         with:
           stack: ${{ steps.toolchain.outputs.stack }}
       - name: Move the factory-loop checkout aside
+        id: factory-loop-aside
         # The repo's checks (a tree-wide prettier, for one) must not see factory-loop's files. It comes back at
         # the end of the job: the runner re-resolves the local composite action for its post phase.
         run: mv .factory-loop "$RUNNER_TEMP/factory-loop"
@@ -65,5 +66,5 @@ jobs:
           track_progress: "true"
           settings: '{"extraKnownMarketplaces":{"factory-loop":{"source":{"source":"github","repo":"crucibledx/factory-loop"}}},"enabledPlugins":{"crucible-loop@factory-loop":true}}'
       - name: Restore the factory-loop checkout
-        if: always()
+        if: always() && steps.factory-loop-aside.outcome == 'success'
         run: mv "$RUNNER_TEMP/factory-loop" .factory-loop

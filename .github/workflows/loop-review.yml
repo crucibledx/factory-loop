@@ -135,7 +135,9 @@ jobs:
           printf '\nA toolchain install failed on this runner. Report checks it breaks as could not run, never as findings.\n' \
             >> "$LOOP_REVIEW_DIR/prompt.md"
       - name: Move the factory-loop checkout out of the workspace
-        # The reviewer runs the repo's own checks; a tree-wide check must not see factory-loop's files.
+        id: factory-loop-aside
+        # The reviewer runs the repo's own checks; a tree-wide check must not see factory-loop's files. It comes
+        # back at the end of the job: the runner re-resolves the local composite action for its post phase.
         if: steps.collect.outputs.mode != 'gate'
         run: mv .factory-loop "$RUNNER_TEMP/factory-loop"
       - name: Review
@@ -168,6 +170,9 @@ jobs:
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 7
+      - name: Restore the factory-loop checkout
+        if: always() && steps.factory-loop-aside.outcome == 'success'
+        run: mv "$RUNNER_TEMP/factory-loop" .factory-loop
 
   # The check the rulesets require (review / review). It holds the write token and never checks out PR code; only
   # factory-loop's own self-review runs the PR's workflow and loop_ref, by design.

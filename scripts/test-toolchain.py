@@ -312,15 +312,40 @@ restores = [i for i in range(len(ci_wf)) if ci_wf.startswith(BACK, i)]
 setups = [i for i in range(len(ci_wf)) if ci_wf.startswith("uses: ./.factory-loop/.github/actions/setup-toolchain", i)]
 cmds = [ci_wf.index(m) for m in ('done <<< "$QUALITY"', 'bash -eo pipefail -c "$TEST_COMMAND"',
                                  'bash -eo pipefail -c "$BUILD_COMMAND"')]
+GATED = "- name: Restore the factory-loop checkout\n        if: always() && steps.factory-loop-aside.outcome == 'success'"
 check("every ci job moves .factory-loop aside after its setup and restores it after the repo's commands",
       len(asides) == 3 and len(restores) == 3 and len(setups) == 3
       and all(s < a < c < r for s, a, c, r in zip(setups, asides, cmds, restores))
-      and ci_wf.count('- name: Restore the factory-loop checkout\n        if: always()') == 3)
+      and ci_wf.count(GATED) == 3 and ci_wf.count("id: factory-loop-aside") == 3)
+# The quality job skips checkout and setup when no quality commands resolve; its aside carries the same
+# condition, so an empty-quality repo passes with the notice instead of failing the mv.
+quality_region = ci_wf[:ci_wf.index('done <<< "$QUALITY"')]
+aside_step = quality_region[quality_region.rindex("- name: Move the factory-loop checkout aside"):]
+check("the quality aside is skipped when no quality commands resolve",
+      "if: needs.resolve.outputs.quality != ''" in aside_step)
 for name in ("loop-mention.yml", "loop-implement.yml"):
     wf = open(os.path.join(ROOT, ".github", "workflows", name), encoding="utf-8").read()
     check(f"{name} moves .factory-loop aside before droid-action and restores it after",
           wf.index("setup-toolchain") < wf.index(ASIDE)
-          < wf.index("Factory-AI/droid-action") < wf.index(BACK))
+          < wf.index("Factory-AI/droid-action") < wf.index(BACK)
+          and GATED in wf and wf.count("id: factory-loop-aside") == 1)
+review_wf = open(os.path.join(ROOT, ".github", "workflows", "loop-review.yml"), encoding="utf-8").read()
+check("loop-review restores its moved checkout after the upload, gated on a successful move",
+      review_wf.index(ASIDE) < review_wf.index("Upload the review") < review_wf.index(BACK)
+      and GATED in review_wf and review_wf.count("id: factory-loop-aside") == 1)
+
+
+def last_step(text, idx):
+    """The restore's run line is followed by another job (or the file ends), never by another step."""
+    rest = text[text.index("\n", idx) + 1:]
+    return rest.strip() == "" or rest.startswith("\n  ")
+
+
+check("each restore is its job's last step",
+      all(last_step(ci_wf, r) for r in restores)
+      and all(last_step(wf, wf.index(BACK)) for wf in (
+          open(os.path.join(ROOT, ".github", "workflows", n), encoding="utf-8").read()
+          for n in ("loop-mention.yml", "loop-implement.yml", "loop-review.yml"))))
 
 # install.sh never installs an active declaration: a copied toolchain.json would override inference.
 install = open(os.path.join(ROOT, "scripts", "install.sh"), encoding="utf-8").read()

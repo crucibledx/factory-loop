@@ -104,8 +104,10 @@ jobs:
           stack: ${{ needs.resolve.outputs.stack }}
           bun-version: ${{ inputs.bun_version }}
       - name: Move the factory-loop checkout aside
+        id: factory-loop-aside
         # The repo's checks (a tree-wide prettier, for one) must not see factory-loop's files. It comes back at
         # the end of the job: the runner re-resolves the local composite action for its post phase.
+        if: needs.resolve.outputs.quality != ''
         run: mv .factory-loop "$RUNNER_TEMP/factory-loop"
       - env:
           QUALITY: ${{ needs.resolve.outputs.quality }}
@@ -116,7 +118,7 @@ jobs:
             echo "::group::$cmd"; bash -eo pipefail -c "$cmd"; echo "::endgroup::"
           done <<< "$QUALITY"
       - name: Restore the factory-loop checkout
-        if: always()
+        if: always() && steps.factory-loop-aside.outcome == 'success'
         run: mv "$RUNNER_TEMP/factory-loop" .factory-loop
 
   test-lane:
@@ -150,6 +152,7 @@ jobs:
           stack: ${{ needs.resolve.outputs.stack }}
           bun-version: ${{ inputs.bun_version }}
       - name: Move the factory-loop checkout aside
+        id: factory-loop-aside
         # The repo's checks (a tree-wide prettier, for one) must not see factory-loop's files. It comes back at
         # the end of the job: the runner re-resolves the local composite action for its post phase.
         run: mv .factory-loop "$RUNNER_TEMP/factory-loop"
@@ -167,7 +170,7 @@ jobs:
           # One report per lane; a single lane keeps the action's default check name.
           check_name: ${{ needs.resolve.outputs.multi_os == 'true' && format('JUnit Test Report ({0})', matrix.os) || 'JUnit Test Report' }}
       - name: Restore the factory-loop checkout
-        if: always()
+        if: always() && steps.factory-loop-aside.outcome == 'success'
         run: mv "$RUNNER_TEMP/factory-loop" .factory-loop
 
   # The required `ci / test` check: passes only when every lane passed, or when there are no tests to run.
@@ -213,6 +216,7 @@ jobs:
           stack: ${{ needs.resolve.outputs.stack }}
           bun-version: ${{ inputs.bun_version }}
       - name: Move the factory-loop checkout aside
+        id: factory-loop-aside
         # The repo's checks (a tree-wide prettier, for one) must not see factory-loop's files. It comes back at
         # the end of the job: the runner re-resolves the local composite action for its post phase.
         run: mv .factory-loop "$RUNNER_TEMP/factory-loop"
@@ -223,5 +227,5 @@ jobs:
           bash -eo pipefail -c "$BUILD_COMMAND"
           if [ -n "$BUILD_VERIFY" ]; then bash -eo pipefail -c "$BUILD_VERIFY"; fi
       - name: Restore the factory-loop checkout
-        if: always()
+        if: always() && steps.factory-loop-aside.outcome == 'success'
         run: mv "$RUNNER_TEMP/factory-loop" .factory-loop
