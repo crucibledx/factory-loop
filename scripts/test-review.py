@@ -61,10 +61,11 @@ def fake_request(method, path, body=None):
         if state.pop("runs_error", False):
             raise RuntimeError("GET runs -> 502")
         return {"workflow_runs": state["runs"]}
-    if method == "GET" and path.startswith("/repos/o/r/actions/runs/100/jobs?filter=latest"):
+    if method == "GET" and path.startswith("/repos/o/r/actions/runs/") and "/jobs?filter=latest" in path:
         if state.get("jobs_error"):
             raise RuntimeError("GET jobs -> 403")
-        return {"jobs": state.get("jobs", [])}
+        run_jobs = state.get("jobs", [])
+        return {"jobs": run_jobs.get(int(path.split("/")[6]), []) if isinstance(run_jobs, dict) else run_jobs}
     if method == "GET" and path.startswith("/repos/o/r/check-runs/") and "/annotations" in path:
         return state.get("notes", {}).get(int(path.split("/")[5]), [])
     if state["reject_inline"] and path.endswith("/reviews") and body and body.get("comments"):
@@ -188,9 +189,9 @@ check("a usage-limit stop without a reset time still says so", code == 1
       and "Review stopped at the usage limit; it re-runs after the reset (the reset time was not reported)." in out)
 state["notes"] = {30: [{"title": "", "message": "Process completed with exit code 1."}]}
 code, out = gate_output(stopped)
-check("a review run that failed otherwise is named, with its run, and the gate fails",
+check("a review run that failed otherwise is named, with its run and the job to re-run, and the gate fails",
       code == 1 and "its review run ended as failure without posting one" in out and URL in out
-      and "usage limit" not in out)
+      and "`review / reviewer` job" in out and "usage limit" not in out)
 state["jobs_error"] = True
 code, out = gate_output(stopped)
 check("a failed lookup of why the review stopped keeps the plain message and fails",
@@ -199,8 +200,24 @@ state["jobs_error"] = False
 state["notes"] = {30: LIMIT_NOTE}
 code, out = gate_output([{"id": 200, "status": "in_progress"}])
 check("with no review run of the head at all, the plain message stays", code == 1 and "No completed review" in out)
-state["reviews"] = REVIEWED
+state["runs"], state["reviews"] = stopped, REVIEWED
 check("a review that lands after a usage-limit stop (the retry) passes the gate", exit_code(lr.gate) == 0)
+state["reviews"] = []
+code, out = gate_output([{**stopped[0], "run_attempt": 10}, stopped[1]])
+check("a stop past the retry's attempt cap says to re-run it by hand", code == 1
+      and "after 10 attempts, so it is not re-run again" in out and "`review / reviewer`" in out)
+# The API lists runs in any order; the newest one (highest id) is the head's latest review.
+OTHER = {"id": 150, "status": "completed", "conclusion": "failure", "html_url": URL.replace("100", "150")}
+state.update({"jobs": {100: [{"id": 30, "name": "review / reviewer", "conclusion": "failure"}],
+                       150: [{"id": 32, "name": "review / reviewer", "conclusion": "failure"}]},
+              "notes": {30: LIMIT_NOTE, 32: [{"title": "", "message": "Process completed with exit code 1."}]}})
+code, out = gate_output([stopped[0], OTHER, stopped[1]])
+check("the newest review run decides: a later plain failure after a usage-limit stop",
+      code == 1 and "ended as failure" in out and "runs/150" in out and "usage limit" not in out)
+state["notes"] = {30: [{"title": "", "message": "Process completed with exit code 1."}], 32: LIMIT_NOTE}
+code, out = gate_output([OTHER, stopped[0], stopped[1]])
+check("the newest review run decides: a later usage-limit stop after a plain failure",
+      code == 1 and "Review stopped at the usage limit" in out and "runs/150" in out)
 state.update({"jobs": [], "notes": {}})
 del os.environ["GITHUB_RUN_ID"]
 state["reviews"] = REVIEWED

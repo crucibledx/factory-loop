@@ -473,23 +473,27 @@ def no_review_reason(head):
     default = f"No completed review for {head[:7]} yet. The review run for this commit sets this check."
     if not os.environ.get("GITHUB_RUN_ID"):
         return default
-    # Imported here: usage_limit imports this module.
-    from usage_limit import fmt, limit_stop
     try:
+        # Imported here: usage_limit imports this module.
+        from usage_limit import MAX_ATTEMPTS, fmt, limit_stop
         latest = next(iter(review_runs(own_workflow_id(), head)), None)
         if not latest or latest["status"] != "completed":
             return default
         job, reset = limit_stop(env("REPO"), latest["id"])
-    except (RuntimeError, KeyError, TypeError, ValueError) as err:
+    except (ImportError, RuntimeError, KeyError, TypeError, ValueError) as err:
         print(f"cannot look up why the review run stopped: {err!r}"[:300])
         return default
     where = latest.get("html_url") or f"run {latest['id']}"
+    by_hand = "Re-run that run's `review / reviewer` job (or its failed jobs)."
     if job:
+        if latest.get("run_attempt", 1) >= MAX_ATTEMPTS:
+            return (f"Review stopped at the usage limit after {MAX_ATTEMPTS} attempts, so it is not re-run again "
+                    f"({where}). {by_hand} This is not a review verdict.")
         when = f"after {fmt(reset)}" if reset else "after the reset (the reset time was not reported)"
         return (f"Review stopped at the usage limit; it re-runs {when}. {head[:7]} has no review yet, so this check "
                 f"stays red until that review sets it ({where}). This is not a review verdict.")
-    return (f"No completed review for {head[:7]}: its review run ended as {latest.get('conclusion')} without "
-            f"posting one ({where}). Re-run that run's review job.")
+    return (f"No completed review for {head[:7]}: its review run ended as {latest.get('conclusion') or 'unknown'} "
+            f"without posting one ({where}). {by_hand}")
 
 
 def wait_for_review(head):
