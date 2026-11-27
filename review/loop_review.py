@@ -21,6 +21,8 @@ import urllib.request
 
 API = os.environ.get("GITHUB_API_URL", "https://api.github.com")
 OUT = os.environ.get("LOOP_REVIEW_DIR", ".loop-review")
+ORG_RULES_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "plugins", "crucible-loop", "skills",
+                              "engineering-standards", "org-rules.md")
 REVIEW_MARK = re.compile(r"<!-- crucible-review sha=([0-9a-f]{7,40})(?: first_size=(\d+))? -->")
 FINDING_MARK = re.compile(r"<!-- crucible-finding sev=(P[0-2]) -->")
 SEVERITIES = ("P0", "P1", "P2")
@@ -209,7 +211,14 @@ def render_prompt(mode, run_checks):
     prompt = template.replace("{{MODE}}", mode).replace("{{CONTEXT_PATH}}", f"{OUT}/context.json")
     prompt = prompt.replace("{{DIFF_PATH}}", f"{OUT}/diff.patch").replace("{{RESULT_PATH}}", f"{OUT}/result.json")
     prompt = prompt.replace("{{STANDARDS_PATH}}", os.environ.get("LOOP_STANDARDS", ""))
+    prompt = prompt.replace("{{ORG_RULES}}", org_rules())
     return prompt.replace("{{CHECKS}}", checks)
+
+
+def org_rules():
+    """The org rules, inlined: the reviewer cannot read the private hq repo they come from."""
+    with open(ORG_RULES_PATH, encoding="utf-8") as fh:
+        return fh.read().strip()
 
 
 def pr_state():
@@ -241,13 +250,45 @@ def pr_state():
     }
 
 
+def followup_diff(since, head, base):
+    """The changes since the last review, without what merging the base branch into the PR brought in.
+
+    Returns (diff result, scope). After such a merge, since..head also holds the base's own commits, so the head is
+    compared with the reviewed commit merged with the same base commit. When that merge conflicts, the author's
+    resolution cannot be told apart, so the whole PR is the diff.
+    """
+    # Exit 1 with no output: no common ancestor, so the PR holds none of the base's commits.
+    forks = git("merge-base", "--all", base, head)
+    if forks.returncode not in (0, 1):
+        sys.exit(f"git merge-base {base} {head} failed: {forks.stderr.strip()}")
+    forks = forks.stdout.split()
+    if all(git("merge-base", "--is-ancestor", fork, since).returncode == 0 for fork in forks):
+        return git("diff", "--unified=5", f"{since}..{head}"), "since_review"
+    # stderr: collect's stdout is the mode, written to $GITHUB_OUTPUT.
+    if len(forks) > 1:
+        print(f"the PR and the base have {len(forks)} merge bases, reviewing the whole PR diff", file=sys.stderr)
+        return git("diff", "--unified=5", f"{base}...{head}"), "whole_pr"
+    merged = git("merge-tree", "--write-tree", since, forks[0])
+    if merged.returncode == 0:
+        return git("diff", "--unified=5", merged.stdout.split()[0], head), "since_review"
+    if merged.returncode == 1:
+        print(f"the base merge conflicts with {since[:7]}, reviewing the whole PR diff", file=sys.stderr)
+    else:
+        print(f"git merge-tree failed (it needs git 2.38 or later), reviewing the whole PR diff: "
+              f"{merged.stderr.strip()[:300]}", file=sys.stderr)
+    return git("diff", "--unified=5", f"{base}...{head}"), "whole_pr"
+
+
 def collect():
     os.makedirs(OUT, exist_ok=True)
     context = pr_state()
     head, since = context["head"], context["since"]
     ensure_commit(context["base"])
     ensure_commit(since)
-    diff = git("diff", "--unified=5", f"{since}...{head}" if context["mode"] == "full" else f"{since}..{head}")
+    if context["mode"] == "followup":
+        diff, context["diff_scope"] = followup_diff(since, head, context["base"])
+    else:
+        diff, context["diff_scope"] = git("diff", "--unified=5", f"{since}...{head}"), "whole_pr"
     if diff.returncode != 0:
         sys.exit(f"git diff {since} {head} failed: {diff.stderr.strip()}")
     with open(f"{OUT}/diff.patch", "w", encoding="utf-8") as fh:

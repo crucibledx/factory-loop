@@ -88,7 +88,9 @@ The review runs as two jobs. `review / reviewer` (read-only) runs `droid exec` a
 artifact. `review / review`, the required check, holds the write token and never checks out PR code. It rebuilds the
 PR state and open threads from the API, posts the result, and gates. It fails when the run was cancelled or the
 reviewer job did not finish. This repo's own self-review is the exception: it tests the PR's version of the workflow
-and `review/` scripts, so on factory-loop PRs the write job runs the PR's code by design.
+and `review/` scripts, so on factory-loop PRs the write job runs the PR's code by design. The prompt includes the org rules from
+`plugins/crucible-loop/skills/engineering-standards/org-rules.md`, since the reviewer cannot read the private `hq`
+repo.
 
 Secrets, set once:
 

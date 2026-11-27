@@ -5,9 +5,11 @@ description: Crucible org engineering standards for design, architecture, tests,
 
 # Crucible engineering standards (v1)
 
-These rules apply to every crucibledx repo. A repo's `AGENTS.md` / `CONTRIBUTING.md` can be stricter or override a
-rule; say so there explicitly. Severity hints in brackets tell the reviewer how to classify a violation
+These rules apply to every crucibledx repo. A repo's `AGENTS.md`, `CONTRIBUTING.md` or `.factory/loop-contract.md`
+can be stricter or override a rule; say so there explicitly. Severity hints in brackets tell the reviewer how to classify a violation
 (see `review/prompt.md`): **[P1]** blocks the merge, **[P2]** should be fixed or answered, **[nit]** never blocks.
+The org rules every repo follows (platform, license, diagrams, commits, versioning) are in `org-rules.md` next to
+this file; the PR reviewer gets them in its prompt.
 
 ## 1. Scope and size
 
