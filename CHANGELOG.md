@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.7.0 — 2026-11-27
 
 - `loop-review`: when the head's review run stopped at the Factory usage limit, a gate-only run (a submitted review
   or a thread reply) says "Review stopped at the usage limit; it re-runs after <reset>" with a link to that run,
