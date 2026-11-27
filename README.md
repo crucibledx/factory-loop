@@ -58,7 +58,7 @@ in `crucibledx/assets`.
 | `plugins/crucible-loop/droids/`       | `researcher`, `spec-reviewer-arch`, `spec-reviewer-product`, `code-reviewer`, `verifier` |
 | `plugins/crucible-loop/hooks/`        | Guard: blocks pushes to `main`, force pushes, and PR merges             |
 | `.github/workflows/loop-*.yml`        | Reusable workflows: review + merge gate, auto-merge on approval, `@droid` mentions, spec merged, org CI (`loop-ci`; `loop-implement` is deprecated) |
-| `templates/repo/`                     | The thin per-repo files: caller workflows (`crucible-loop.yml`, `ci.yml`), `.factory/settings.json`, `.factory/toolchain.json` (bun example; a Go example ships alongside), `.factory/loop-contract.md` |
+| `templates/repo/`                     | The thin per-repo files: caller workflows (`crucible-loop.yml`, `ci.yml`), `.factory/settings.json`, `.factory/loop-contract.md`, and `toolchain.*.example.json` declarations |
 
 ## Add the loop to a repo
 
@@ -66,8 +66,10 @@ in `crucibledx/assets`.
 scripts/install.sh ~/crucible/projects/<repo>
 ```
 
-Then edit `.factory/toolchain.json` (or delete it and let the stack be inferred) and `.factory/loop-contract.md`
-with the repo's real check commands. (A `## Loop contract` section in `AGENTS.md` also works.)
+Then edit `.factory/loop-contract.md` with the repo's real check commands. (A `## Loop contract` section in
+`AGENTS.md` also works.) To declare the toolchain, copy a `templates/repo/.factory/toolchain.*.example.json`
+to `.factory/toolchain.json` and edit it; `install.sh` never adds the file itself, because a declaration
+overrides inference.
 
 `.github/workflows/ci.yml` calls `loop-ci`. A repo declares its toolchain in `.factory/toolchain.json`: the `stack`
 (`bun`, `go` or `none`), the `os` runners its tests run on, and `checks` commands. Without the file the stack is
@@ -95,8 +97,9 @@ What each repo does to come onto the toolchain file:
 
 - **tundish:** nothing; the `bun` stack is inferred.
 - **forge-cli:** nothing until it turns on review `run_checks`; then it declares a file matching its stack.
-- **ember:** declares `stack: go` and its runners; its `go.yml` can move to a `loop-ci` caller (the required check
-  names change, so the ruleset needs updating the day it flips).
+- **ember:** declares `stack: go` and its runners; its `go.yml`'s CI jobs can move to a `loop-ci` caller once
+  the declared commands cover everything they run today (vet, e2e, generation checks) — the manual release job
+  stays, and the required check names change, so the ruleset needs updating the day it flips.
 - **web:** its `ci.yml` becomes a `loop-ci` caller with a build command; the ruleset's required names change.
 - **assets:** declares `stack: assets` and adds a `loop-ci` caller (crucibledx/assets#34); the required checks
   become `ci / quality` and `ci / test`.

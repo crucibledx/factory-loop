@@ -1,6 +1,7 @@
 # Org CI. Logic lives in crucibledx/factory-loop (loop-ci.yml). Commands come from .factory/toolchain.json;
 # set inputs below only to override them for this caller.
-# Required checks for the main ruleset: `ci / quality`, `ci / test`, and `ci / build` when build_command is set.
+# Required checks for the main ruleset: `ci / quality`, `ci / test`, and `ci / build` when a build command
+# resolves (from the declaration, the stack default or a caller input).
 # The test job needs `checks: write` (JUnit report), so keep it in the permissions below.
 name: CI
 

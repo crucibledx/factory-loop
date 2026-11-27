@@ -13,12 +13,12 @@ copy .github/workflows/crucible-loop.yml
 copy .github/workflows/ci.yml
 copy .github/CODEOWNERS
 copy .factory/settings.json
-copy .factory/toolchain.json
 copy .factory/loop-contract.md
 if [ ! -d "$repo/specs" ]; then
   mkdir -p "$repo/specs"
   printf '# Specs\n\nProject specs for this repo. Process and template: crucibledx/hq specs/README.md.\n' > "$repo/specs/README.md"
   echo "added  specs/README.md"
 fi
-echo "todo   edit .factory/toolchain.json and .factory/loop-contract.md with this repo's real commands"
-echo "       (a Go example ships as templates/repo/.factory/toolchain.go.example.json in factory-loop)"
+echo "todo   edit .factory/loop-contract.md with this repo's real commands"
+echo "       to declare the toolchain, copy a templates/repo/.factory/toolchain.*.example.json from"
+echo "       factory-loop to .factory/toolchain.json and edit it (without the file the stack is inferred)"
