@@ -7,7 +7,7 @@ import subprocess
 import sys
 import tempfile
 import types
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 
 # The same results locally, in an Actions job and under the hosted reviewer: nothing loop_review reads is inherited.
 for name in [k for k in os.environ if k.startswith(("GITHUB_", "LOOP_"))] + ["EVENT_NAME", "BLOCKING_SEVERITIES"]:
@@ -419,9 +419,100 @@ with tempfile.TemporaryDirectory() as repo:
     check("collect prints only the mode when the compare fails", failed_compare.getvalue() == "full\n")
     written = json.load(open(f"{repo}/.loop-review/context.json"))
     check("collect prints the mode and writes the context, diff and prompt", out.getvalue().strip() == "full"
-          and written["mode"] == "full" and written["head"] != HEAD
+          and written["mode"] == "full" and written["head"] != HEAD and written["diff_scope"] == "whole_pr"
           and "+two" in open(f"{repo}/.loop-review/diff.patch").read()
           and "(full)" in open(f"{repo}/.loop-review/prompt.md").read())
+
+    # factory-loop#33: a follow-up after the PR merged its base branch reviewed the base's commits too.
+    def write(name, content):
+        open(f"{repo}/{name}", "w").write(content)
+        run_git("add", name)
+
+    def followup(reviewed, base_tip):
+        PULL["base"]["sha"], os.environ["HEAD_SHA"] = base_tip, run_git("rev-parse", "HEAD")
+        state["reviews"] = marker(reviewed, 50)
+        os.chdir(repo)
+        try:
+            with redirect_stdout(io.StringIO()) as mode:
+                lr.collect()
+        finally:
+            os.chdir(cwd)
+            os.environ["HEAD_SHA"] = HEAD
+        return (mode.getvalue().strip(), json.load(open(f"{repo}/.loop-review/context.json"))["diff_scope"],
+                open(f"{repo}/.loop-review/diff.patch").read())
+
+    reviewed = run_git("rev-parse", "HEAD")
+    write("a.ts", "one\ntwo\nthree\n")
+    run_git("commit", "-qm", "pr: three")
+    mode, scope, diff = followup(reviewed, base)
+    check("a follow-up without a base merge reviews the commits since the review",
+          (mode, scope) == ("followup", "since_review") and "+three" in diff and "+two" not in diff)
+
+    reviewed = run_git("rev-parse", "HEAD")
+    run_git("checkout", "-q", "-b", "upstream", base)
+    write("b.ts", "from the base\n")
+    run_git("commit", "-qm", "base: b")
+    base_tip = run_git("rev-parse", "HEAD")
+    run_git("checkout", "-q", "-")
+    write("a.ts", "one\ntwo\nthree\nfour\n")
+    run_git("commit", "-qm", "pr: four")
+    mode, scope, diff = followup(reviewed, base_tip)
+    check("a follow-up after the base moved on without a merge reviews only the PR's commits",
+          (mode, scope) == ("followup", "since_review") and "+four" in diff and "b.ts" not in diff
+          and "+three" not in diff)
+
+    reviewed = run_git("rev-parse", "HEAD")
+    run_git("merge", "-q", "--no-commit", "--no-ff", "upstream")
+    write("a.ts", "one\ntwo\nthree\nfour\nfive\n")
+    run_git("commit", "-qm", "merge the base, with an edit")
+    write("a.ts", "one\ntwo\nthree\nfour\nfive\nsix\n")
+    run_git("commit", "-qm", "pr: six")
+    mode, scope, diff = followup(reviewed, base_tip)
+    check("a follow-up after merging the base reviews the PR's changes, edits in the merge too, not the base's commits",
+          (mode, scope) == ("followup", "since_review") and "+five" in diff and "+six" in diff
+          and "b.ts" not in diff and "+four" not in diff)
+
+    real_git = lr.git
+
+    def fake_git(*args):
+        if args[0] == "merge-tree":
+            return subprocess.CompletedProcess(args, 129, "", "error: unknown option `write-tree'")
+        if args[:2] == ("merge-base", "--all") and state.get("criss_cross"):
+            found = real_git(*args)
+            return subprocess.CompletedProcess(args, 0, found.stdout + reviewed + "\n", "")
+        return real_git(*args)
+
+    lr.git = fake_git
+    try:
+        with redirect_stderr(io.StringIO()) as note:
+            mode, scope, diff = followup(reviewed, base_tip)
+        check("a merge-tree that fails (old git) reviews the whole PR diff and names the cause",
+              (mode, scope) == ("followup", "whole_pr") and "+three" in diff and "b.ts" not in diff
+              and "needs git 2.38" in note.getvalue() and "write-tree" in note.getvalue())
+        state["criss_cross"] = True
+        with redirect_stderr(io.StringIO()) as note:
+            mode, scope, diff = followup(reviewed, base_tip)
+        check("more than one merge base reviews the whole PR diff",
+              (mode, scope) == ("followup", "whole_pr") and "2 merge bases" in note.getvalue())
+    finally:
+        lr.git = real_git
+        state.pop("criss_cross", None)
+
+    reviewed = run_git("rev-parse", "HEAD")
+    run_git("checkout", "-q", "upstream")
+    write("a.ts", "one\nTWO\n")
+    write("c.ts", "more from the base\n")
+    run_git("commit", "-qm", "base: conflicting a, c")
+    base_tip = run_git("rev-parse", "HEAD")
+    run_git("checkout", "-q", "-")
+    subprocess.run(["git", "-C", repo, "merge", "-q", "upstream"], capture_output=True, check=False)
+    write("a.ts", "one\nTWO\nthree\nfour\nfive\nsix\n")
+    run_git("commit", "-qm", "merge the base, resolved")
+    with redirect_stderr(io.StringIO()) as note:
+        mode, scope, diff = followup(reviewed, base_tip)
+    check("a follow-up after a conflicting base merge reviews the whole PR diff and says so",
+          (mode, scope) == ("followup", "whole_pr") and "+three" in diff and "b.ts" not in diff
+          and "c.ts" not in diff and "conflicts" in note.getvalue())
 
 # The split that keeps PR code away from the write token, read from the workflow itself.
 workflow = open(os.path.join(os.path.dirname(__file__), "..", ".github", "workflows", "loop-review.yml")).read()
