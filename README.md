@@ -71,6 +71,10 @@ and an optional build. Set its `with:` inputs for repo-specific commands, and ad
 `ci / build` when `build_command` is set) as required checks on the `main` ruleset. `install.sh` keeps an existing
 `ci.yml`; replace it by hand.
 
+The caller's `review` job skips draft PRs itself, so the required `review / review` check only comes from runs on
+non-draft PRs. `install.sh` keeps an existing `crucible-loop.yml`; in a repo that already has one, add
+`&& !github.event.pull_request.draft` to the `review` job's `if` by hand.
+
 `loop-review` reviews without running the repo's code by default. With `run_checks: true` in the caller's `review` job,
 it installs Bun and the dependencies (when the repo has `bun.lock`) and `actionlint` (when the loop contract lists it),
 and the reviewer runs the loop contract's checks. That runs PR code in a job holding `FACTORY_API_KEY` and a write

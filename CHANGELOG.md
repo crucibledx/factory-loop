@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- The caller template's `review` job skips draft PRs (`!github.event.pull_request.draft`), and so does this repo's
+  self review. Before, a PR opened as a draft and marked ready got two runs: the draft run's `review / review` was
+  skipped inside `loop-review`, and GitHub could create that skipped check after the real review, so it became the
+  check's newest result. Skipped counts as passed for rulesets and `loop-automerge`, so it hid the review's verdict,
+  including a failing gate. Now a draft run reports only a skipped `review` check. `install.sh` keeps existing
+  callers: add the condition to the `review` job's `if` by hand.
 - `engineering-standards` holds Go to the same structure bar as TypeScript (implement and review stages): a
   domain-driven layout (context packages without I/O, thin adapters, imports pointing inward), soft size limits for
   files, functions and packages with their review severity, refactoring rules (when to extract a package, consumer-side

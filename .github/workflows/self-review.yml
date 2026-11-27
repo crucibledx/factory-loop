@@ -13,7 +13,9 @@ permissions:
   actions: read
 
 jobs:
+  # Drafts are skipped here so they never report a skipped `review / review` (see templates/repo crucible-loop.yml).
   review:
+    if: ${{ !github.event.pull_request.draft }}
     uses: ./.github/workflows/loop-review.yml
     with:
       loop_ref: ${{ github.event.pull_request.head.sha }}
