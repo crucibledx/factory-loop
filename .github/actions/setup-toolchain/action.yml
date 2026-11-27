@@ -11,6 +11,10 @@ inputs:
     description: Bun version. Empty uses .bun-version, then package.json (packageManager, engines.bun), then latest.
     required: false
     default: ""
+  ignore-scripts:
+    description: Install dependencies without their lifecycle scripts (untrusted checkouts).
+    required: false
+    default: "false"
 
 runs:
   using: composite
@@ -37,8 +41,13 @@ runs:
         bun-version-file: ${{ steps.bun-file.outputs.file }}
     - if: inputs.stack == 'bun'
       shell: bash
+      env:
+        IGNORE_SCRIPTS: ${{ inputs.ignore-scripts }}
       run: |
-        if [ -f package.json ]; then bun install --frozen-lockfile; else
+        if [ -f package.json ]; then
+          if [ "$IGNORE_SCRIPTS" = true ]; then bun install --frozen-lockfile --ignore-scripts;
+          else bun install --frozen-lockfile; fi
+        else
           echo "::notice::No package.json, dependencies not installed."; fi
 
     - if: inputs.stack == 'go'

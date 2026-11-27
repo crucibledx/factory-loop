@@ -83,8 +83,9 @@ non-draft PRs. `install.sh` keeps an existing `crucible-loop.yml`; in a repo tha
 `&& !github.event.pull_request.draft` to the `review` job's `if` by hand.
 
 `loop-review` reviews without running the repo's code by default. With `run_checks: true` in the caller's `review` job,
-it installs Bun and the dependencies (when the repo has `bun.lock`) and `actionlint` (when the loop contract lists it),
-and the reviewer runs the loop contract's checks. That runs PR code in the `review / reviewer` job. That job has no
+it sets up the repo's toolchain from `.factory/toolchain.json` or the inferred stack (Bun and the dependencies for a
+Bun repo, Go with modules and golangci-lint for a Go repo, without lifecycle scripts) and `actionlint` (when the loop
+contract lists it), and the reviewer runs the loop contract's checks. The prompt names the resolved stack and commands. That runs PR code in the `review / reviewer` job. That job has no
 write token, but it holds `FACTORY_API_KEY` and writes the `result.json` that the `review / review` job posts and
 gates on, so turn it on only in repos where every PR author is trusted.
 

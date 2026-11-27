@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- `loop-review`'s `run_checks`, `loop-mention` and `loop-implement` set up the repo's toolchain the way
+  `loop-ci` does (factory-loop#41): `scripts/toolchain.py` resolves `.factory/toolchain.json` or the inferred
+  stack, and the `setup-toolchain` action installs it, loaded from factory-loop at a new `loop_ref` input (default
+  `v0`). The review installs dependencies with `--ignore-scripts`, as before, and its prompt names the resolved
+  stack, runners and check commands. `loop-implement`'s `setup_bun` input is deprecated; false only skips the bun
+  stack's setup.
+
 - `loop-ci` runs each repo's toolchain, not just Bun (factory-loop#41). A new optional `.factory/toolchain.json`
   declares the `stack` (`bun`, `go` or `none`), the `os` runners the tests run on, and `checks` commands; without it
   the stack is inferred as before (`bun.lock` or `package.json` → `bun`, `go.mod` → `go`, otherwise `none`), so a

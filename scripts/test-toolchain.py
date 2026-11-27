@@ -164,6 +164,19 @@ proc = subprocess.run([sys.executable, os.path.join(HERE, "toolchain.py")], cwd=
 check("the CLI resolves the working directory and prints outputs without GITHUB_OUTPUT",
       proc.returncode == 0 and parse_outputs(proc.stdout.split("\n", 1)[1])["stack"] == "go")
 
+# The --describe CLI, as loop-review renders it into the run_checks prompt.
+proc = subprocess.run([sys.executable, os.path.join(HERE, "toolchain.py"), "--describe"],
+                      cwd=repo({"go.mod": "module x\n"}), capture_output=True, text=True,
+                      env={k: v for k, v in os.environ.items() if k != "GITHUB_OUTPUT"})
+check("--describe prints the resolved stack, runners and commands",
+      proc.returncode == 0 and "Stack: go." in proc.stdout and "quality: make lint" in proc.stdout
+      and "test: make test" in proc.stdout and "build: make build" in proc.stdout)
+proc = subprocess.run([sys.executable, os.path.join(HERE, "toolchain.py"), "--describe"],
+                      cwd=repo({DECL: {"stack": "python"}}), capture_output=True, text=True,
+                      env={k: v for k, v in os.environ.items() if k != "GITHUB_OUTPUT"})
+check("--describe fails with the reason on an invalid declaration",
+      proc.returncode == 1 and "stack must be one of" in proc.stdout)
+
 # loop-ci.yml and the setup action, read as text.
 workflow = open(os.path.join(ROOT, ".github", "workflows", "loop-ci.yml"), encoding="utf-8").read()
 action = open(os.path.join(ROOT, ".github", "actions", "setup-toolchain", "action.yml"), encoding="utf-8").read()
@@ -204,8 +217,12 @@ check("the bun setup keeps the callers' version resolution: .bun-version only wh
       and 'echo "file=.bun-version" >> "$GITHUB_OUTPUT"' in action
       and "bun-version: ${{ inputs.bun-version }}" in action
       and "bun-version-file: ${{ steps.bun-file.outputs.file }}" in action)
-check("the bun install stays conditional on package.json",
-      'if [ -f package.json ]; then bun install --frozen-lockfile; else' in action)
+check("the bun install stays conditional on package.json, with an ignore-scripts mode for untrusted checkouts",
+      'if [ -f package.json ]; then' in action
+      and 'if [ "$IGNORE_SCRIPTS" = true ]; then bun install --frozen-lockfile --ignore-scripts;' in action
+      and 'else bun install --frozen-lockfile; fi' in action
+      and 'IGNORE_SCRIPTS: ${{ inputs.ignore-scripts }}' in action
+      and 'ignore-scripts:' in action)
 check("the install step consumes the version the step resolved, pinned and install-only",
       "version: ${{ steps.golangci-version.outputs.version }}" in action
       and "golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a" in action
@@ -241,5 +258,27 @@ check("the gate fails when the resolve job failed", gate_rc("failure", "skipped"
 check("the gate fails when lanes were skipped but a test command resolved",
       gate_rc("success", "skipped", "make test") != 0)
 check("the gate passes with a notice when there are no tests", gate_rc("success", "skipped", "") == 0)
+
+# The other workflows that set up a toolchain, read as text.
+review_wf = open(os.path.join(ROOT, ".github", "workflows", "loop-review.yml"), encoding="utf-8").read()
+reviewer = review_wf.split("\n  reviewer:\n", 1)[1].split("\n  review:\n", 1)[0]
+check("the review's run_checks resolves and sets up the repo's toolchain, never the Bun-only steps",
+      "setup-bun" not in reviewer and "python3 .factory-loop/scripts/toolchain.py" in reviewer
+      and "uses: ./.factory-loop/.github/actions/setup-toolchain" in reviewer
+      and 'ignore-scripts: "true"' in reviewer)
+check("a failed toolchain install is still noted, never fatal",
+      "steps.toolchain.outcome == 'failure'" in reviewer and "steps.setup.outcome == 'failure'" in reviewer
+      and "continue-on-error: true" in reviewer and "actionlint" in reviewer)
+for name in ("loop-mention.yml", "loop-implement.yml"):
+    wf = open(os.path.join(ROOT, ".github", "workflows", name), encoding="utf-8").read()
+    check(f"{name} sets up the resolved toolchain from factory-loop at loop_ref, not always Bun",
+          "setup-bun" not in wf and "repository: crucibledx/factory-loop" in wf
+          and "ref: ${{ inputs.loop_ref }}" in wf and "default: v0" in wf
+          and "python3 .factory-loop/scripts/toolchain.py" in wf
+          and "uses: ./.factory-loop/.github/actions/setup-toolchain" in wf)
+implement = open(os.path.join(ROOT, ".github", "workflows", "loop-implement.yml"), encoding="utf-8").read()
+check("setup_bun stays as a deprecated input that gates only the bun stack",
+      "setup_bun:" in implement and "Deprecated." in implement
+      and "steps.toolchain.outputs.stack != 'bun' || inputs.setup_bun" in implement)
 
 sys.exit(1 if failures else 0)

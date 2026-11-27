@@ -187,14 +187,30 @@ def block(name, value, delim):
     return f"{name}<<{delim}\n{value}\n{delim}\n" if value else f"{name}=\n"
 
 
+def describe(resolved):
+    """The resolved toolchain as a readable summary, for the review prompt."""
+    lines = [f"Stack: {resolved['stack']}. Test runners: {', '.join(resolved['os'])}."]
+    for name in ("quality", "test", "build"):
+        value = "\n".join(resolved[name]) if name == "quality" else resolved[name]
+        lines.append(f"{name}: {value if value else '(none)'}")
+    return "\n".join(lines)
+
+
 def main(argv, env):
-    repo = argv[1] if len(argv) > 1 else "."
+    describe_mode = len(argv) > 1 and argv[1] == "--describe"
+    repo = argv[2] if describe_mode and len(argv) > 2 else (argv[1] if len(argv) > 1 and not describe_mode else ".")
     try:
         resolved = resolve(repo, env)
     except Invalid as err:
+        if describe_mode:
+            print(str(err))
+            return 1
         where = f" file={err.file}" if err.file else ""
         print(f"::error{where}::{annotation(str(err))}")
         return 1
+    if describe_mode:
+        print(describe(resolved))
+        return 0
     for notice in resolved["notices"]:
         print(f"::notice::{annotation(notice)}")
     print(f"stack {resolved['stack']}, tests on {', '.join(resolved['os'])}")

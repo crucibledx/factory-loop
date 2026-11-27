@@ -530,6 +530,9 @@ check("the review job fails when the run was cancelled or the reviewer did not s
       in review_job)
 check("the artifact is downloaded before factory-loop is checked out",
       review_job.index("name: Download the review") < review_job.index("uses: actions/checkout@"))
+check("the reviewer job sets up the resolved toolchain without lifecycle scripts, never the Bun-only steps",
+      "setup-bun" not in reviewer_job and "uses: ./.factory-loop/.github/actions/setup-toolchain" in reviewer_job
+      and 'ignore-scripts: "true"' in reviewer_job)
 
 os.environ.pop("LOOP_REVIEW_PROMPT", None)
 default_prompt = lr.render_prompt("full", run_checks=False)
@@ -538,6 +541,9 @@ check("the default prompt forbids running repository code",
       "Do not run the repository's code" in default_prompt and "## Running checks" not in default_prompt)
 check("run_checks allows the loop contract's checks instead",
       "## Running checks" in checks_prompt and "Do not run the repository's code" not in checks_prompt)
+check("the run_checks prompt names the resolved toolchain",
+      "The resolved toolchain (from .factory/toolchain.json or the repo's files):" in checks_prompt
+      and "Stack:" in checks_prompt and "test:" in checks_prompt)
 check("no placeholder is left in either prompt", "{{" not in default_prompt + checks_prompt)
 org_rules = open(lr.ORG_RULES_PATH, encoding="utf-8").read().strip()
 check("both prompts carry the org rules, so the reviewer needs nothing from the private hq repo",
